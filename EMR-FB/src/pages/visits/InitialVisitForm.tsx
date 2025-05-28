@@ -4,9 +4,8 @@ import axios from 'axios';
 import { Save, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
-type Timeout = ReturnType<typeof setTimeout>;
-
-type FormData = {
+// Define the interface for the form data
+interface InitialVisitFormData {
   chiefComplaint: string;
   chiropracticAdjustment: string[];
   chiropracticOther: string;
@@ -33,7 +32,7 @@ type FormData = {
   };
   disabilityDuration: string;
   otherNotes: string;
-};
+}
 
 const InitialVisitForm: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -41,11 +40,12 @@ const InitialVisitForm: React.FC = () => {
   const { user } = useAuth();
 
   const [isSaving, setIsSaving] = useState(false);
-  const [isGeneratingNarrative, setIsGeneratingNarrative] = useState(false);
   const [autoSaveStatus, setAutoSaveStatus] = useState('');
-  const [autoSaveTimer, setAutoSaveTimer] = useState<Timeout | null>(null);
-  const [formData, setFormData] = useState<FormData>({
-    chiefComplaint: '',
+  const [autoSaveTimer, setAutoSaveTimer] = useState<NodeJS.Timeout | null>(null);
+
+  // Use the defined interface for the state type
+  const [formData, setFormData] = useState<InitialVisitFormData>({
+    chiefComplaint: '', // ✅ Add this
     chiropracticAdjustment: [],
     chiropracticOther: '', // ✅ NEW
     acupuncture: [],
@@ -54,13 +54,13 @@ const InitialVisitForm: React.FC = () => {
     rehabilitationExercises: [],
     durationFrequency: {
       timesPerWeek: '',
-      reEvalInWeeks: '',
+      reEvalInWeeks: ''
     },
     referrals: [],
     imaging: {
       xray: [],
       mri: [],
-      ct: [],
+      ct: []
     },
     diagnosticUltrasound: '',
     nerveStudy: [],
@@ -70,97 +70,64 @@ const InitialVisitForm: React.FC = () => {
       avoidProlongedSitting: false
     },
     disabilityDuration: '',
-    otherNotes: '',
+    otherNotes: ''
   });
 
-  const handleCheckboxArrayChange = (field: keyof Omit<FormData, 'imaging' | 'durationFrequency' | 'restrictions'> | keyof FormData['imaging'], value: string, group?: 'imaging') => {
+  const handleCheckboxArrayChange = (field: string, value: string, group?: keyof Omit<InitialVisitFormData, 'durationFrequency' | 'restrictions'>) => {
     setFormData(prev => {
-      let updatedPrev = { ...prev };
+      let targetArray: string[] = [];
 
       if (group) {
-        // Handle nested array fields like imaging.xray
-        const parentArray = updatedPrev[group][field as keyof FormData['imaging']];
-        const updatedParentArray = Array.isArray(parentArray) ?
-          parentArray.includes(value)
-            ? parentArray.filter(item => item !== value)
-            : [...parentArray, value]
-          : [value]; // If not array, start new array
-
-        updatedPrev = {
-          ...updatedPrev,
-          [group]: {
-            ...updatedPrev[group],
-            [field]: updatedParentArray,
-          },
-        };
-
+        const parent = prev[group];
+        if (typeof parent === 'object' && parent !== null && field in parent && Array.isArray((parent as any)[field])) {
+          targetArray = (parent as any)[field];
+        }
       } else {
-        // Handle flat array fields like chiropracticAdjustment, referrals, nerveStudy, physiotherapy, rehabilitationExercises, acupuncture
-        const flatFieldArray = updatedPrev[field as keyof Omit<FormData, 'imaging' | 'durationFrequency' | 'restrictions'>];
-        const updatedFlatFieldArray = Array.isArray(flatFieldArray) ?
-          flatFieldArray.includes(value)
-            ? flatFieldArray.filter(item => item !== value)
-            : [...flatFieldArray, value]
-          : [value]; // If not array, start new array
-
-        updatedPrev = {
-          ...updatedPrev,
-          [field as keyof Omit<FormData, 'imaging' | 'durationFrequency' | 'restrictions'>]: updatedFlatFieldArray,
-        };
+        if (field in prev && Array.isArray(prev[field as keyof InitialVisitFormData])) {
+           targetArray = prev[field as keyof InitialVisitFormData] as string[];
+        }
       }
 
-      return updatedPrev;
+      const updated = targetArray.includes(value)
+        ? targetArray.filter((item: string) => item !== value)
+        : [...targetArray, value];
+
+      if (group) {
+        return {
+          ...prev,
+          [group]: {
+            ...(prev[group] as any),
+            [field]: updated
+          }
+        };
+      } else {
+        return {
+          ...prev,
+          [field as keyof InitialVisitFormData]: updated
+        };
+      }
     });
 
     triggerAutoSave();
   };
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    const target = e.target as HTMLInputElement; // Cast to HTMLInputElement to access 'checked'
-    const { name, value, type } = target;
-    const checked = type === 'checkbox' ? target.checked : undefined;
+  
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value, type } = e.target;
+    const checked = (e.target as HTMLInputElement).checked;
 
     setFormData(prev => {
-      let updatedPrev = { ...prev };
-
       if (name.includes('.')) {
-        const [group, field] = name.split('.') as [keyof FormData, string];
-        const parent = updatedPrev[group] as Record<string, any>;
-
-        if (group === 'durationFrequency' || group === 'restrictions') {
-           updatedPrev = {
-             ...updatedPrev,
-             [group]: {
-               ...parent,
-               [field]: type === 'number' ? parseFloat(value) : (type === 'checkbox' ? checked : value),
-             } as any // Temporary cast if needed, but aim for stronger typing
-           };
-        } else if (group === 'imaging') {
-           // Imaging is handled by handleCheckboxArrayChange for arrays, but might have other fields later
-           // For now, assume direct string/boolean fields within imaging if any were added.
-            updatedPrev = {
-             ...updatedPrev,
-             [group]: {
-               ...parent,
-               [field]: type === 'checkbox' ? checked : value,
-             } as any
-           };
-        } else {
-           // Handle other potential nested objects with dynamic fields
-            updatedPrev = {
-             ...updatedPrev,
-             [group]: {
-               ...parent,
-               [field]: value,
-             } as any
-           };
-        }
-
-      } else {
-        // Handle top-level fields
-         updatedPrev = { ...updatedPrev, [name as keyof FormData]: type === 'checkbox' ? checked : value } as FormData;
+        const [group, field] = name.split('.') as [keyof InitialVisitFormData, string];
+        const currentGroup = prev[group] as any;
+        return {
+          ...prev,
+          [group]: {
+            ...(typeof currentGroup === 'object' && currentGroup !== null ? currentGroup : {}),
+            [field]: type === 'checkbox' ? checked : value
+          }
+        };
       }
-      return updatedPrev;
+      return { ...prev, [name as keyof InitialVisitFormData]: type === 'checkbox' ? checked : value };
     });
 
     triggerAutoSave();
@@ -179,40 +146,44 @@ const InitialVisitForm: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
+  
     try {
-      // Submit form data to the server
-      const response = await axios.post(`/api/visits/${id}/initial`, {
-        ...formData,
-        providerId: user?._id  // Using _id instead of id to match the User type
+      // First, save the visit data
+      const response = await axios.post(`http://localhost:5000/api/visits`, {
+         ...formData,
+         patient: id,
+         doctor: user?._id,
+         visitType: 'initial'
       });
+
+      const savedVisitId = response.data.visit._id;
       
-      if (response.data.success) {
-        navigate(`/visits/${id}`);
+      // Then, generate AI narrative
+      try {
+        const aiResponse = await axios.post(`${import.meta.env.VITE_API_URL}/api/generate-narrative`, {
+          ...formData,
+          visitType: 'initial'
+        });
+
+        if (aiResponse.data.success) {
+          // Update the visit with the AI narrative
+          await axios.patch(`http://localhost:5000/api/visits/${savedVisitId}`, {
+            aiNarrative: aiResponse.data.narrative
+          });
+        }
+      } catch (aiError) {
+        console.error('Error generating AI narrative:', aiError);
+        // Continue with the form submission even if AI generation fails
       }
+
+      localStorage.removeItem(`initialVisit_${id}`);
+      navigate(`/patients/${id}`);
     } catch (error) {
-      console.error('Error saving visit:', error);
-    } finally {
+      console.error('Error submitting form:', error);
       setIsSaving(false);
     }
   };
-
-  // Load saved form data on mount
-  useEffect(() => {
-    if (id) {
-      const savedData = localStorage.getItem(`initialVisit_${id}`);
-      if (savedData) {
-        setFormData(JSON.parse(savedData));
-      }
-    }
-
-    // Cleanup timer on unmount
-    return () => {
-      if (autoSaveTimer) {
-        clearTimeout(autoSaveTimer);
-      }
-    };
-  }, [id]);
-
+  
   return (
     <div className="container mx-auto p-6">
       <div className="flex items-center mb-4">
@@ -310,43 +281,79 @@ const InitialVisitForm: React.FC = () => {
 </section>
 
 
-        {/* Imaging Section */}
-        <section className="mb-6">
-          <h2 className="text-lg font-semibold mb-4">Imaging</h2>
-          
-          {(['xray', 'mri', 'ct'] as const).map(modality => {
-            const imagingModality = modality as keyof typeof formData.imaging;
-            return (
-              <div key={modality} className="mb-4">
-                <h3 className="font-medium mb-2">{modality.toUpperCase()}</h3>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                  {['C/S', 'T/S', 'L/S', 'Sacroiliac Joint R', 'Sacroiliac Joint L', 'Hip R', 'Hip L', 'Knee R', 'Knee L', 'Ankle R', 'Ankle L', 'Shoulder R', 'Shoulder L', 'Elbow R', 'Elbow L', 'Wrist R', 'Wrist L'].map(region => (
-                    <label key={`${modality}-${region}`} className="flex items-center gap-2">
-                      <input 
-                        type="checkbox" 
-                        checked={formData.imaging[imagingModality].includes(region)} 
-                        onChange={() => handleCheckboxArrayChange(imagingModality, region, 'imaging')} 
-                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <span className="text-sm">{region}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-        </section>
+{/* Physiotherapy */}
+<section>
+  <h2 className="text-lg font-semibold mt-6 mb-2">Physiotherapy</h2>
+  <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+    {['Hot Pack/Cold Pack', 'Ultrasound', 'EMS', 'E-Stim', 'Therapeutic Exercises', 'NMR', 'Orthion Bed', 'Mechanical Traction', 'Paraffin Wax', 'Infrared'].map(item => (
+      <label key={item} className="flex items-center gap-2">
+        <input type="checkbox" checked={formData.physiotherapy.includes(item)} onChange={() => handleCheckboxArrayChange('physiotherapy', item)} />
+        {item}
+      </label>
+    ))}
+  </div>
+</section>
+
+{/* Rehabilitation Exercises */}
+<section>
+  <h2 className="text-lg font-semibold mt-6 mb-2">Rehabilitation Exercises</h2>
+  <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+    {formData.chiropracticAdjustment.map(item => (
+      <label key={item + '-rehab'} className="flex items-center gap-2">
+        <input type="checkbox" checked={formData.rehabilitationExercises.includes(item)} onChange={() => handleCheckboxArrayChange('rehabilitationExercises', item)} />
+        {item}
+      </label>
+    ))}
+  </div>
+</section>
+
+{/* Duration and Re-Evaluation */}
+<section>
+  <h2 className="text-lg font-semibold mt-6 mb-2">Duration & Re-Evaluation</h2>
+  <div className="flex flex-wrap gap-4">
+    <label>
+      Times per Week:
+      <input type="number" name="durationFrequency.timesPerWeek" value={formData.durationFrequency.timesPerWeek} onChange={handleInputChange} className="ml-2 border px-2 py-1 rounded" />
+    </label>
+    <label>
+      Re-Evaluation in Weeks:
+      <input type="number" name="durationFrequency.reEvalInWeeks" value={formData.durationFrequency.reEvalInWeeks} onChange={handleInputChange} className="ml-2 border px-2 py-1 rounded" />
+    </label>
+  </div>
+</section>
+
+{/* Referrals */}
+<section>
+  <h2 className="text-lg font-semibold mt-6 mb-2">Referrals</h2>
+  <div className="flex flex-wrap gap-4">
+    {['Orthopedist', 'Neurologist', 'Pain Management'].map(item => (
+      <label key={item} className="flex items-center gap-2">
+        <input type="checkbox" checked={formData.referrals.includes(item)} onChange={() => handleCheckboxArrayChange('referrals', item)} />
+        {item}
+      </label>
+    ))}
+  </div>
+</section>
+
+{/* Imaging (X-Ray, MRI, CT) */}
+{['xray', 'mri', 'ct'].map(modality => (
+  <section key={modality}>
+    <h2 className="text-lg font-semibold mt-6 mb-2">{modality.toUpperCase()}</h2>
+    <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+      {['C/S', 'T/S', 'L/S', 'Sacroiliac Joint R', 'Sacroiliac Joint L', 'Hip R', 'Hip L', 'Knee R', 'Knee L', 'Ankle R', 'Ankle L', 'Shoulder R', 'Shoulder L', 'Elbow R', 'Elbow L', 'Wrist R', 'Wrist L'].map(region => (
+        <label key={`${modality}-${region}`} className="flex items-center gap-2">
+          <input type="checkbox" checked={formData.imaging[modality as keyof InitialVisitFormData['imaging']].includes(region)} onChange={() => handleCheckboxArrayChange(modality, region, 'imaging')} />
+          {region}
+        </label>
+      ))}
+    </div>
+  </section>
+))}
 
 {/* Diagnostic Ultrasound */}
 <section>
   <h2 className="text-lg font-semibold mt-6 mb-2">Diagnostic Ultrasound</h2>
   <textarea name="diagnosticUltrasound" value={formData.diagnosticUltrasound} onChange={handleInputChange} rows={2} className="w-full border rounded px-3 py-2" placeholder="Enter area of ultrasound" />
-</section>
-
-{/* Additional Notes */}
-<section>
-  <h2 className="text-lg font-semibold mt-6 mb-2">Other Notes</h2>
-  <textarea name="otherNotes" value={formData.otherNotes} onChange={handleInputChange} rows={3} className="w-full border rounded px-3 py-2" placeholder="Add any other comments" />
 </section>
 
 {/* Nerve Study */}
@@ -381,35 +388,30 @@ const InitialVisitForm: React.FC = () => {
   </div>
 </section>
 
-        {/* Form Actions */}
-        <div className="mt-6 flex justify-between border-t pt-4">
-          <button 
-            type="button" 
-            onClick={() => navigate(-1)}
-            className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-md text-gray-700 transition-colors"
-          >
-            <ArrowLeft size={16} /> Back
-          </button>
-          <div className="flex items-center gap-3">
-            {autoSaveStatus && (
-              <span className="text-sm text-gray-500">
-                {autoSaveStatus}
-              </span>
-            )}
-            <button 
-              type="submit"
-              disabled={isSaving}
-              className={`flex items-center gap-2 px-4 py-2 rounded-md text-white ${isSaving ? 'bg-blue-400' : 'bg-blue-600 hover:bg-blue-700'} transition-colors`}
-            >
-              <Save size={16} /> {isSaving ? 'Saving...' : 'Save'}
-            </button>
-          </div>
-        </div>
+{/* Disability Duration */}
+<section>
+  <h2 className="text-lg font-semibold mt-6 mb-2">Disability Duration</h2>
+  <input type="text" name="disabilityDuration" value={formData.disabilityDuration} onChange={handleInputChange} className="w-full border px-3 py-2 rounded" placeholder="e.g., 1 week, 2 weeks, 1 month" />
+</section>
+
+{/* Additional Notes */}
+<section>
+  <h2 className="text-lg font-semibold mt-6 mb-2">Other Notes</h2>
+  <textarea name="otherNotes" value={formData.otherNotes} onChange={handleInputChange} rows={3} className="w-full border rounded px-3 py-2" placeholder="Add any other comments" />
+</section>
+
+{/* Submit Button */}
+<div className="flex justify-end mt-6">
+  <button type="submit" disabled={isSaving} className="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700 disabled:opacity-50">
+    {isSaving ? 'Saving...' : 'Save Visit'}
+  </button>
+</div>
+
       </form>
+      </div>  
+      </div>
     </div>
-    </div>
-  </div>
-);
+  );
 };
 
 export default InitialVisitForm;

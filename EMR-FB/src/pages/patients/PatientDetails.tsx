@@ -1,7 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import logo from '../../Assets/logo.png';
 import { useAuth } from '../../contexts/AuthContext';
+import { toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 import BillingList from '../billing/BillingList';
 import { 
   ArrowLeft, 
@@ -16,7 +21,68 @@ import {
   FileArchive
 } from 'lucide-react';
 import { useReactToPrint } from 'react-to-print';
-import { jsPDF } from 'jspdf';
+
+
+const toBase64 = async (url: string): Promise<string> => {
+  const res = await fetch(url);
+  const blob = await res.blob();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+};
+
+const drawSection = (doc, title: string, content: { [key: string]: any }, y: number): number => {
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const margin = 20;
+
+  doc.setFont('times', 'bold');
+  doc.setFontSize(13);
+  doc.text(title, margin, y);
+  y += 6;
+
+  doc.setFillColor(255, 255, 255);
+  doc.setDrawColor(200);
+  let boxHeight = 0;
+  const keys = Object.keys(content);
+
+  keys.forEach(key => {
+    const value = typeof content[key] === 'object'
+      ? JSON.stringify(content[key], null, 2)
+      : content[key] || 'N/A';
+
+    const splitText = doc.splitTextToSize(`${key.replace(/([A-Z])/g, ' $1')}: ${value}`, 170);
+    doc.setFont('times', 'normal');
+    doc.setFontSize(10);
+    doc.text(splitText, margin, y);
+    y += splitText.length * 5 + 2;
+    boxHeight += splitText.length * 5 + 2;
+  });
+
+  y += 4;
+  return y;
+};
+const formatRestrictions = (restrictionsObj: any) => {
+  if (!restrictionsObj || typeof restrictionsObj !== 'object') return 'N/A';
+
+  const lines = [];
+
+  if (restrictionsObj.avoidActivityWeeks) {
+    lines.push(`Avoid activity for: ${restrictionsObj.avoidActivityWeeks} week(s)`);
+  }
+
+  if (restrictionsObj.liftingLimitLbs) {
+    lines.push(`Lifting limit: ${restrictionsObj.liftingLimitLbs} lbs`);
+  }
+
+  if (restrictionsObj.avoidProlongedSitting !== undefined) {
+    lines.push(`Avoid prolonged sitting: ${restrictionsObj.avoidProlongedSitting ? 'Yes' : 'No'}`);
+  }
+
+  return lines.length ? lines.join('\n') : 'No restrictions provided';
+};
 
 interface Patient {
   _id: string;
@@ -354,440 +420,178 @@ setInvoiceCount(invoiceResponse.data.totalInvoices);
     doc.save(`Patient_${patient.firstName}_${patient.lastName}.pdf`);
   };
 
-  const generateFullReport = async (): Promise<void> => {
-    try {
-      if (!patient || visits.length === 0) {
-        console.error('No patient data or visits available');
-        return;
-      }
+const generateFullReport = async () => {
+  const doc = new jsPDF();
+  const pageWidth = doc.internal.pageSize.getWidth();
+  let y = 30;
+  const margin = 20;
+  const logoBase64 = await toBase64(logo);
 
-      const doc = new jsPDF();
-      const margin = 15;
-      const pageWidth = doc.internal.pageSize.width;
-      const pageHeight = doc.internal.pageSize.height;
-      let yOffset = 20;
-      const lineHeight = 7;
-
-      // Add header
-      doc.setFontSize(12);
-      doc.text('Tina Taguhi Lusikyan', margin, yOffset);
-      yOffset += lineHeight;
-      doc.text('100 W. Broadway, Suite 1040', margin, yOffset);
-      yOffset += lineHeight;
-      doc.text('Glendale, CA 91210', margin, yOffset);
-      yOffset += lineHeight * 2;
-
-      // Add patient information table
-      doc.setFontSize(10);
-      doc.text('Patient Information', margin + 60, yOffset);
-      yOffset += lineHeight;
-      
-      // Draw table borders
-      doc.rect(margin, yOffset, pageWidth - margin * 2, lineHeight * 5);
-      doc.line(margin + 15, yOffset, margin + 15, yOffset + lineHeight * 5);
-      doc.line(margin + 30, yOffset, margin + 30, yOffset + lineHeight * 5);
-      doc.line(margin + 45, yOffset, margin + 45, yOffset + lineHeight * 5);
-      
-      // Horizontal lines
-      for (let i = 1; i < 5; i++) {
-        doc.line(margin, yOffset + lineHeight * i, pageWidth - margin, yOffset + lineHeight * i);
-      }
-
-      // Add patient info content
-      doc.setFont('helvetica', 'bold');
-      doc.text('Patient', margin + 2, yOffset + lineHeight * 0.7);
-      doc.text('Date of Birth', margin + 2, yOffset + lineHeight * 1.7);
-      doc.text('Patient Gender', margin + 2, yOffset + lineHeight * 2.7);
-      doc.text('Marital Status', margin + 2, yOffset + lineHeight * 3.7);
-      doc.text('Injury', margin + 2, yOffset + lineHeight * 4.7);
-
-      doc.setFont('helvetica', 'normal');
-      doc.text(`${patient.firstName} ${patient.lastName}`, margin + 17, yOffset + lineHeight * 0.7);
-      doc.text(new Date(patient.dateOfBirth).toLocaleDateString(), margin + 17, yOffset + lineHeight * 1.7);
-      doc.text(patient.gender, margin + 17, yOffset + lineHeight * 2.7);
-      doc.text('N/A', margin + 17, yOffset + lineHeight * 3.7); // Marital status not in our data
-      doc.text('N/A', margin + 17, yOffset + lineHeight * 4.7); // Injury date not in our data
-
-      yOffset += lineHeight * 6;
-
-      // Process each visit
-      visits.forEach((visit: Visit) => {
-        // Check if we need a new page
-        if (yOffset > pageHeight - 30) {
-          doc.addPage();
-          yOffset = 20;
-        }
-
-        // Visit header
-        doc.setFontSize(14);
-        doc.setFont('helvetica', 'bold');
-        const visitType = visit.visitType === 'initial' ? 'Initial' : 
-                         visit.visitType === 'followup' ? 'Progress' : 'Final';
-        doc.text(`Narrative Encounter - Exam -- ${visitType} ${patient.firstName} ${patient.lastName}`, margin, yOffset);
-        yOffset += lineHeight * 2;
-
-        doc.setFontSize(12);
-        doc.text(new Date(visit.date).toLocaleDateString(), margin, yOffset);
-        yOffset += lineHeight * 2;
-
-        // Subjective section
-        doc.setFont('helvetica', 'bold');
-        doc.text('Subjective', margin, yOffset);
-        yOffset += lineHeight;
-
-        // Chief Complaint
-        if (visit.chiefComplaint) {
-          doc.setFont('helvetica', 'bold');
-          doc.text('Chief Complaint', margin + 5, yOffset);
-          yOffset += lineHeight;
-
-          doc.setFont('helvetica', 'normal');
-          const complaintStatus = visit.areasImproving ? 'Improving' :
-                                visit.areasExacerbated ? 'Worse' :
-                                visit.areasSame ? 'Same' : undefined;
-          const text = complaintStatus ? 
-            `• ${visit.chiefComplaint} (${complaintStatus})` :
-            `• ${visit.chiefComplaint}`;
-          doc.text(text, margin + 10, yOffset);
-          yOffset += lineHeight;
-        }
-
-        // History of Present Illness (from medical history)
-        if (visit.visitType === 'initial' && patient.medicalHistory) {
-          doc.setFont('helvetica', 'bold');
-          doc.text('History of Present Illness', margin + 5, yOffset);
-          yOffset += lineHeight;
-
-          doc.setFont('helvetica', 'normal');
-          const historyItems = [
-            ...(patient.medicalHistory.conditions || []), // Ensure it's an array
-            ...(patient.medicalHistory.medications || []),
-            ...(patient.medicalHistory.allergies || [])
-          ];
-          historyItems.forEach(item => {
-            if (item) {
-              doc.text(`• ${item}`, margin + 10, yOffset);
-              yOffset += lineHeight;
-            }
-          });
-          if (historyItems.length > 0) yOffset += lineHeight; // Add space if items were added
-        }
-
-        // Past, Family, and Social History
-        if (visit.visitType === 'initial' && patient.medicalHistory) {
-          doc.setFont('helvetica', 'bold');
-          doc.text('Past, Family, and Social History', margin + 5, yOffset);
-          yOffset += lineHeight;
-
-          // Social History
-          doc.setFont('helvetica', 'bold');
-          doc.text('Social History', margin + 10, yOffset);
-          yOffset += lineHeight;
-
-          doc.setFont('helvetica', 'normal');
-          if (patient.address?.street || patient.address?.city || patient.address?.state || patient.address?.country) {
-            let addressLine = `• Address: `;
-            if (patient.address.street) addressLine += patient.address.street;
-            if (patient.address.city || patient.address.state) {
-              if (patient.address.street) addressLine += ', ';
-              addressLine += `${patient.address.city || ''}${patient.address.city && patient.address.state ? ', ' : ''}${patient.address.state || ''} ${patient.address.zipCode || ''}`.trim();
-            }
-            if (patient.address.country) {
-               if (patient.address.street || patient.address.city || patient.address.state) addressLine += ', ';
-               addressLine += patient.address.country;
-            }
-             if (addressLine !== `• Address: `) {
-                doc.text(addressLine, margin + 15, yOffset);
-                yOffset += lineHeight;
-             }
-          }
-          if (patient.phone) {
-            doc.text(`• Phone: ${patient.phone}`, margin + 15, yOffset);
-            yOffset += lineHeight;
-          }
-          if (patient.address?.street || patient.address?.city || patient.address?.state || patient.address?.country || patient.phone) {
-               yOffset += lineHeight; // Add space if social history was added
-          }
-
-          // Family History
-          doc.setFont('helvetica', 'bold');
-          doc.text('Family History', margin + 10, yOffset);
-          yOffset += lineHeight;
-
-          doc.setFont('helvetica', 'normal');
-          if (patient.medicalHistory.familyHistory && patient.medicalHistory.familyHistory.length > 0) {
-             patient.medicalHistory.familyHistory.forEach(item => {
-              if (item) {
-                doc.text(`• ${item}`, margin + 15, yOffset);
-                yOffset += lineHeight;
-              }
-            });
-             if (patient.medicalHistory.familyHistory.some(item => item)) yOffset += lineHeight; // Add space if family history was added
-          } else {
-             doc.text('• No family history provided', margin + 15, yOffset);
-             yOffset += lineHeight * 2; // Add space even if no history
-          }
-
-          // Past History (Surgeries)
-          doc.setFont('helvetica', 'bold');
-          doc.text('Past History', margin + 10, yOffset);
-          yOffset += lineHeight;
-
-          doc.setFont('helvetica', 'normal');
-          if (patient.medicalHistory.surgeries && patient.medicalHistory.surgeries.length > 0) {
-             patient.medicalHistory.surgeries.forEach(item => {
-              if (item) {
-                doc.text(`• ${item}`, margin + 15, yOffset);
-                yOffset += lineHeight;
-              }
-            });
-             if (patient.medicalHistory.surgeries.some(item => item)) yOffset += lineHeight; // Add space if past history was added
-          } else {
-             doc.text('• No past surgeries recorded', margin + 15, yOffset);
-             yOffset += lineHeight * 2; // Add space even if no surgeries
-          }
-        }
-
-        // Objective section
-        doc.setFont('helvetica', 'bold');
-        doc.text('Objective', margin, yOffset);
-        yOffset += lineHeight;
-
-        // Neurological
-        if (visit.nerveStudy && visit.nerveStudy.length > 0) {
-          doc.setFont('helvetica', 'bold');
-          doc.text('Examination Neurological', margin + 5, yOffset);
-          yOffset += lineHeight;
-
-          doc.setFont('helvetica', 'normal');
-          visit.nerveStudy.forEach(item => {
-            doc.text(`• ${item}`, margin + 10, yOffset);
-            yOffset += lineHeight;
-          });
-          yOffset += lineHeight;
-        }
-
-        // Musculoskeletal
-        doc.setFont('helvetica', 'bold');
-        doc.text('Musculoskeletal', margin + 5, yOffset);
-        yOffset += lineHeight;
-
-        // Muscle Palpation
-        if (visit.musclePalpation) {
-          doc.setFont('helvetica', 'bold');
-          doc.text('Palpations', margin + 10, yOffset);
-          yOffset += lineHeight;
-
-          doc.setFont('helvetica', 'normal');
-          doc.text(`• ${visit.musclePalpation}`, margin + 15, yOffset);
-          yOffset += lineHeight;
-        }
-
-        // Range of Motion
-        if (visit.romWnlNoPain || visit.romWnlWithPain || visit.romImproved || visit.romDecreased || visit.romSame) {
-          doc.setFont('helvetica', 'bold');
-          doc.text('Range of Motions', margin + 10, yOffset);
-          yOffset += lineHeight;
-
-          doc.setFont('helvetica', 'normal');
-          if (visit.romWnlNoPain) doc.text('• WNL (No Pain)', margin + 15, yOffset);
-          if (visit.romWnlWithPain) doc.text('• WNL (With Pain)', margin + 15, yOffset);
-          if (visit.romImproved) doc.text('• Improved', margin + 15, yOffset);
-          if (visit.romDecreased) doc.text('• Decreased', margin + 15, yOffset);
-          if (visit.romSame) doc.text('• Same', margin + 15, yOffset);
-          yOffset += lineHeight;
-        }
-
-        // Assessment and Plan
-        doc.setFont('helvetica', 'bold');
-        doc.text('Assessment and Plan', margin, yOffset);
-        yOffset += lineHeight;
-
-        // Treatment Plans/Rationale
-        doc.setFont('helvetica', 'bold');
-        doc.text('Treatment Plans/Rationale', margin + 5, yOffset);
-        yOffset += lineHeight;
-
-        doc.setFont('helvetica', 'normal');
-        if (visit.chiropracticAdjustment) {
-          visit.chiropracticAdjustment.forEach(item => {
-            doc.text(`• ${item}`, margin + 10, yOffset);
-            yOffset += lineHeight;
-          });
-        }
-        if (visit.acupuncture) {
-          visit.acupuncture.forEach(item => {
-            doc.text(`• ${item}`, margin + 10, yOffset);
-            yOffset += lineHeight;
-          });
-        }
-        if (visit.physiotherapy) {
-          visit.physiotherapy.forEach(item => {
-            doc.text(`• ${item}`, margin + 10, yOffset);
-            yOffset += lineHeight;
-          });
-        }
-        yOffset += lineHeight;
-
-        // Schedule of Care
-        if (visit.scheduleOfCare) {
-          doc.setFont('helvetica', 'bold');
-          doc.text('Schedule of care:', margin + 10, yOffset);
-          yOffset += lineHeight;
-
-          doc.setFont('helvetica', 'normal');
-          doc.text(`• ${visit.scheduleOfCare}`, margin + 15, yOffset);
-          yOffset += lineHeight;
-        }
-
-        // Reevaluation
-        if (visit.reevaluation) {
-          doc.setFont('helvetica', 'bold');
-          doc.text('Reevaluation:', margin + 10, yOffset);
-          yOffset += lineHeight;
-
-          doc.setFont('helvetica', 'normal');
-          doc.text(visit.reevaluation, margin + 15, yOffset);
-          yOffset += lineHeight * 2;
-        }
-
-        // Return Frequency
-        if (visit.returnFrequency) {
-          doc.setFont('helvetica', 'bold');
-          doc.text('Return', margin + 10, yOffset);
-          yOffset += lineHeight;
-
-          doc.setFont('helvetica', 'normal');
-          doc.text(visit.returnFrequency, margin + 15, yOffset);
-          yOffset += lineHeight * 2;
-        }
-
-        // Referrals
-        if (visit.referral || (visit.referrals && Array.isArray(visit.referrals))) {
-          doc.setFont('helvetica', 'bold');
-          doc.text('Referral.', margin + 10, yOffset);
-          yOffset += lineHeight;
-
-          doc.setFont('helvetica', 'normal');
-          if (visit.referral) {
-            doc.text(`• ${visit.referral}`, margin + 15, yOffset);
-            yOffset += lineHeight;
-          }
-          if (visit.referrals && Array.isArray(visit.referrals)) {
-            visit.referrals.forEach(ref => {
-              doc.text(`• ${ref}`, margin + 15, yOffset);
-              yOffset += lineHeight;
-            });
-          }
-          yOffset += lineHeight;
-        }
-
-        // Restrictions
-        if (visit.restrictions) {
-          doc.setFont('helvetica', 'bold');
-          doc.text('Restrictions:', margin + 10, yOffset);
-          yOffset += lineHeight;
-
-          doc.setFont('helvetica', 'normal');
-          if (visit.restrictions.avoidActivityWeeks) {
-            doc.text(`• Avoid Activity: ${visit.restrictions.avoidActivityWeeks} week(s)`, margin + 15, yOffset);
-            yOffset += lineHeight;
-          }
-          if (visit.restrictions.liftingLimitLbs) {
-            doc.text(`• Lifting Limit: ${visit.restrictions.liftingLimitLbs} lbs`, margin + 15, yOffset);
-            yOffset += lineHeight;
-          }
-          if (visit.restrictions.avoidProlongedSitting) {
-            doc.text('• Avoid prolonged sitting/standing', margin + 15, yOffset);
-            yOffset += lineHeight;
-          }
-          yOffset += lineHeight;
-        }
-
-        // Final Exam specific sections
-        if (visit.visitType === 'discharge') {
-          // Prognosis
-          if (visit.prognosis) {
-            doc.setFont('helvetica', 'bold');
-            doc.text('Prognosis:', margin + 10, yOffset);
-            yOffset += lineHeight;
-
-            doc.setFont('helvetica', 'normal');
-            doc.text(visit.prognosis, margin + 15, yOffset);
-            yOffset += lineHeight * 2;
-          }
-
-          // Croft Criteria
-          if (visit.croftCriteria) {
-            doc.setFont('helvetica', 'bold');
-            doc.text('Frequency of Treatment Guideline Placement', margin + 5, yOffset);
-            yOffset += lineHeight;
-
-            doc.setFont('helvetica', 'normal');
-            const croftLines = doc.splitTextToSize(visit.croftCriteria, pageWidth - margin * 2);
-            croftLines.forEach((line: string) => {
-              doc.text(line, margin + 10, yOffset);
-              yOffset += lineHeight;
-            });
-            yOffset += lineHeight * 2;
-          }
-
-          // AMA Guidelines
-          if (visit.amaDisability) {
-            doc.setFont('helvetica', 'bold');
-            doc.text('AMA Guidelines 5th Edition for Impairment', margin + 5, yOffset);
-            yOffset += lineHeight;
-
-            doc.setFont('helvetica', 'normal');
-            const amaLines = doc.splitTextToSize(visit.amaDisability, pageWidth - margin * 2);
-            amaLines.forEach((line: string) => {
-              doc.text(line, margin + 10, yOffset);
-              yOffset += lineHeight;
-            });
-            yOffset += lineHeight * 2;
-          }
-
-          // Future Medical Care
-          if (visit.futureMedicalCare) {
-            doc.setFont('helvetica', 'bold');
-            doc.text('Miscellaneous Notes', margin + 5, yOffset);
-            yOffset += lineHeight;
-
-            doc.setFont('helvetica', 'bold');
-            doc.text('Future Medical Care', margin + 10, yOffset);
-            yOffset += lineHeight;
-
-            doc.setFont('helvetica', 'normal');
-            visit.futureMedicalCare.forEach(item => {
-              const lines = doc.splitTextToSize(item, pageWidth - margin * 2);
-              lines.forEach((line: string) => {
-                doc.text(line, margin + 15, yOffset);
-                yOffset += lineHeight;
-              });
-            });
-            yOffset += lineHeight * 2;
-          }
-
-          // Add provider signature for final visit
-          doc.setFont('helvetica', 'bold');
-          doc.text('Harold Iseke, D.C.', margin, yOffset);
-          yOffset += lineHeight;
-          doc.setFont('helvetica', 'normal');
-          doc.text('Treating Provider', margin, yOffset);
-          yOffset += lineHeight * 2;
-        }
-
-        // Add page break between visits
-        yOffset += lineHeight * 2;
-      });
-
-      // Save the PDF
-      doc.save(`${patient.firstName}_${patient.lastName}_Medical_Report.pdf`);
-    } catch (error) {
-      console.error('Error generating PDF report:', error);
-      alert('Error generating PDF report. Please try again.');
-    }
+  const addHeaderAndFooter = (doc, pageNumber, totalPages) => {
+    doc.setFontSize(10);
+    doc.setTextColor(100);
+    doc.addImage(logoBase64, 'PNG', 15, 10, 10, 10);
+    doc.text('Final Narrative Report', 30, 17);
+    doc.setTextColor(180);
+    doc.text('The Wellness Studio', pageWidth - 50, 17);
+    doc.setDrawColor(150);
+    doc.line(15, 20, pageWidth - 15, 20);
+    const footerText = `The Wellness Studio • 3711 Long Beach Blvd., Suite 200, Long Beach, CA, 90807 • Tel: (562) 980-0555  Page ${pageNumber} of ${totalPages}`;
+    doc.setFontSize(9);
+    doc.setTextColor(120);
+    doc.line(15, 285, pageWidth - 15, 285);
+    doc.text(footerText, pageWidth / 2, 291, { align: 'center' });
   };
+
+  // Patient Info Table
+  doc.setFontSize(13);
+  doc.setTextColor(50);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Patient Information', pageWidth / 2, y, { align: 'center' });
+  y += 4;
+
+  autoTable(doc, {
+    startY: y + 4,
+    styles: { fontSize: 10, cellPadding: 3 },
+    headStyles: { fillColor: [160, 160, 160], textColor: 255 },
+    columnStyles: { 0: { cellWidth: 60 }, 1: { cellWidth: pageWidth - 100 } },
+    head: [['Label', 'Value']],
+    body: [
+      ['Patient', `${patient?.firstName} ${patient?.lastName}`],
+      ['Date of Birth', new Date(patient?.dateOfBirth).toLocaleDateString()],
+      ['Gender', patient?.gender],
+      ['Marital Status', patient?.maritalStatus || 'N/A'],
+      ['Injury Date', patient?.injuryDate ? new Date(patient.injuryDate).toLocaleDateString() : 'N/A'],
+    ],
+    theme: 'grid',
+  });
+
+  y = (doc as any).lastAutoTable.finalY + 10;
+
+  const addNarrativeSection = (title, color, fields) => {
+    let height = 0;
+    const sentences = [];
+
+    fields.forEach(([label, value]) => {
+      if (!value) return;
+      const line = `${label}: ${typeof value === 'string' ? value : Array.isArray(value) ? value.join(', ') : JSON.stringify(value)}`;
+      const wrapped = doc.splitTextToSize(line, 170);
+      sentences.push({ label, text: wrapped });
+      height += wrapped.length * 6 + 6;
+    });
+
+    if (y + height + 20 > 270) {
+      doc.addPage();
+      y = 30;
+    }
+
+    doc.setFillColor(255, 255, 255);
+    doc.setDrawColor(200);
+    doc.roundedRect(margin - 2, y - 6, pageWidth - margin * 2 + 4, height + 16, 4, 4, 'FD');
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(12);
+    doc.setTextColor(color);
+    doc.text(title, margin, y);
+    y += 10;
+
+    doc.setFont('times', 'normal');
+    doc.setFontSize(10);
+    doc.setTextColor(30);
+
+    sentences.forEach(({ label, text }) => {
+      doc.setFont('times', 'bold');
+      doc.text(`${label}:`, margin, y);
+      y += 5;
+      doc.setFont('times', 'normal');
+      doc.text(text, margin + 4, y);
+      y += text.length * 6 + 2;
+    });
+
+    y += 4;
+  };
+
+  const grouped = {
+    initial: visits.find(v => v.visitType === 'initial'),
+    followup: visits.find(v => v.visitType === 'followup'),
+    discharge: visits.find(v => v.visitType === 'discharge')
+  };
+
+  if (grouped.initial) {
+    const v = grouped.initial;
+    addNarrativeSection('🟦 INITIAL VISIT', 'blue', [
+      ['Chief Complaint', v.chiefComplaint],
+      ['Chiropractic Adjustment', v.chiropracticAdjustment],
+      ['Acupuncture', v.acupuncture],
+      ['Physiotherapy', v.physiotherapy],
+      ['Rehabilitation Exercises', v.rehabilitationExercises],
+      ['Imaging', v.imaging],
+      ['Diagnostic Ultrasound', v.diagnosticUltrasound],
+      ['Nerve Study', v.nerveStudy],
+      ['Restrictions', v.restrictions],
+      ['Other Notes', v.otherNotes]
+    ]);
+  }
+
+  if (grouped.followup) {
+    const v = grouped.followup;
+    addNarrativeSection('🟩 FOLLOW-UP VISIT', 'green', [
+      ['Areas', `${v.areasImproving ? 'Improving' : ''} ${v.areasExacerbated ? 'Exacerbated' : ''} ${v.areasSame ? 'Same' : ''}`],
+      ['Muscle Palpation', v.musclePalpation],
+      ['Pain Radiating', v.painRadiating],
+      ['Range of Motion', `${v.romWnlNoPain ? 'WNL (No Pain)' : ''} ${v.romWnlWithPain ? 'WNL (With Pain)' : ''}`],
+      ['Orthopedic Tests', v.orthos?.tests + ' - ' + v.orthos?.result],
+      ['Activities Causing Pain', v.activitiesCausePain],
+      ['Treatment Plan', `${v.treatmentPlan?.treatments} Times/Week - ${v.treatmentPlan?.timesPerWeek}`],
+      ['Overall Response', `${v.overallResponse?.improving ? 'Improving' : ''} ${v.overallResponse?.worse ? 'Worse' : ''} ${v.overallResponse?.same ? 'Same' : ''}`],
+      ['Diagnostic Study', v.diagnosticStudy],
+      ['Home Care', v.homeCare],
+      ['Referral', v.referral],
+      ['Notes', v.otherNotes]
+    ]);
+  }
+
+  if (grouped.discharge) {
+    const v = grouped.discharge;
+    addNarrativeSection('🟥 DISCHARGE VISIT', 'red', [
+      ['Prognosis', v.prognosis],
+      ['Diagnostic Study', v.diagnosticStudy],
+      ['Recommended Future Medical Care', v.futureMedicalCare],
+      ['Croft Criteria', v.croftCriteria],
+      ['AMA Disability', v.amaDisability],
+      ['Home Care Instructions', v.homeCare],
+      ['Referrals / Notes', v.referralsNotes]
+    ]);
+  }
+
+  const totalPages = doc.internal.getNumberOfPages();
+  for (let i = 1; i <= totalPages; i++) {
+    doc.setPage(i);
+    addHeaderAndFooter(doc, i, totalPages);
+  }
+
+  const fileName = `${patient?.lastName || 'Report'}_Narrative_Report.pdf`;
+  doc.save(fileName);
+
+  const blob = doc.output('blob');
+  const formData = new FormData();
+  formData.append('file', blob, fileName);
+
+  try {
+    await axios.post('http://localhost:5000/api/reports/upload', formData);
+    if (patient?.email) {
+      await axios.post('http://localhost:5000/api/reports/email', { email: patient.email, fileName });
+      toast.success('Report emailed to provider/patient');
+    } else {
+      toast.info('Report saved to server (no email provided)');
+    }
+  } catch (err) {
+    console.error('Upload/email failed:', err);
+    toast.error('Upload or email failed.');
+  }
+};
+
+
 
   if (isLoading) {
     return (

@@ -85,38 +85,28 @@ const DischargeVisitForm: React.FC = () => {
       return prev;
     });
   };
+const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
+  setIsSaving(true);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSaving(true);
-    setIsGeneratingNarrative(true);
+  try {
+    const payload = {
+      ...formData,
+      visitType: 'discharge',
+      patient: id,
+    };
 
-    try {
-      const aiApiUrl = `${import.meta.env.VITE_API_URL}/api/generate-narrative`;
-      console.log('Calling AI API at:', aiApiUrl);
-      const aiResponse = await axios.post(aiApiUrl, formData);
-      const generatedNarrative = aiResponse.data.narrative;
-      console.log('Generated narrative:', generatedNarrative);
+    await axios.post('http://localhost:5000/api/visits', payload);
 
-      const payload = {
-        ...formData,
-        visitType: 'discharge',
-        patient: id,
-        otherNotes: `${formData.otherNotes}\n\nAI Generated Narrative:\n${generatedNarrative}`.trim(),
-      };
+    navigate(`/patients/${id}`);
+  } catch (err) {
+    console.error('Error submitting form', err);
+    alert('Form submission failed. Check console for details.');
+  } finally {
+    setIsSaving(false);
+  }
+};
 
-      await axios.post('http://localhost:5000/api/visits', payload);
-      
-      navigate(`/patients/${id}`);
-    } catch (err) {
-      console.error('Error submitting form', err);
-      alert('Form submission failed. Check console for details.');
-    } finally {
-      setIsSaving(false);
-      setIsGeneratingNarrative(false);
-    }
-  };
-  
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6 p-6 bg-white shadow rounded">

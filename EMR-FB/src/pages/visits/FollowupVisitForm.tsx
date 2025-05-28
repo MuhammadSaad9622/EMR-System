@@ -19,6 +19,45 @@ interface Visit {
   __t: string;
 }
 
+// Define the interface for the form data
+interface FollowupVisitFormData {
+  previousVisit: string;
+  areas: string;
+  areasImproving: boolean;
+  areasExacerbated: boolean;
+  areasSame: boolean;
+  musclePalpation: string;
+  painRadiating: string;
+  romWnlNoPain: boolean;
+  romWnlWithPain: boolean;
+  romImproved: boolean;
+  romDecreased: boolean;
+  romSame: boolean;
+  orthos: {
+    tests: string;
+    result: string;
+  };
+  activitiesCausePain: string;
+  activitiesCausePainOther: string;
+  treatmentPlan: {
+    treatments: string;
+    timesPerWeek: string;
+  };
+  overallResponse: {
+    improving: boolean;
+    worse: boolean;
+    same: boolean;
+  };
+  referrals: string;
+  diagnosticStudy: {
+    study: string;
+    bodyPart: string;
+    result: string;
+  };
+  homeCare: string;
+  notes: string;
+}
+
 const FollowupVisitForm: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -28,9 +67,10 @@ const FollowupVisitForm: React.FC = () => {
   const [previousVisits, setPreviousVisits] = useState<Visit[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [isGeneratingNarrative, setIsGeneratingNarrative] = useState(false);
   const [autoSaveStatus, setAutoSaveStatus] = useState('');
-  const [formData, setFormData] = useState({
+
+  // Use the defined interface for the state type
+  const [formData, setFormData] = useState<FollowupVisitFormData>({
     previousVisit: '',
     areas: '',
     areasImproving: false,
@@ -69,7 +109,8 @@ const FollowupVisitForm: React.FC = () => {
   });
   
   // Auto-save timer
-  const [autoSaveTimer, setAutoSaveTimer] = useState<number | null>(null);
+  // Update the type to include NodeJS.Timeout for compatibility
+  const [autoSaveTimer, setAutoSaveTimer] = useState<NodeJS.Timeout | number | null>(null);
   const [localFormData, setLocalFormData] = useState<string | null>(null);
 
   useEffect(() => {
@@ -101,14 +142,14 @@ const FollowupVisitForm: React.FC = () => {
     // Clean up auto-save timer on unmount
     return () => {
       if (autoSaveTimer) {
-        clearTimeout(autoSaveTimer);
+        clearTimeout(autoSaveTimer as any); // Cast to any for compatibility
       }
     };
   }, [id]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
-
+    
     setFormData(prev => {
       let updatedValue: any = value;
 
@@ -116,24 +157,32 @@ const FollowupVisitForm: React.FC = () => {
         updatedValue = e.target.checked;
       }
 
-      // Handle nested objects
+      // Handle nested objects using type assertion
       if (name.includes('.')) {
-        const [parent, child] = name.split('.');
-        return {
-          ...prev,
-          [parent]: {
-            ...(prev[parent as keyof typeof prev] as any),
-            [child]: updatedValue
-          }
-        };
+        const [parent, child] = name.split('.') as [keyof FollowupVisitFormData, string];
+        const currentParent = prev[parent];
+
+        // Ensure the parent is an object before updating
+        if (typeof currentParent === 'object' && currentParent !== null) {
+           return {
+            ...prev,
+            [parent]: {
+              ...currentParent as any,
+              [child]: updatedValue
+            }
+          };
+        }
+        // If parent is not an object, return previous state
+        return prev;
+
       } else {
-        return { ...prev, [name]: updatedValue };
+        return { ...prev, [name as keyof FollowupVisitFormData]: updatedValue };
       }
     });
     
     // Set up auto-save
     if (autoSaveTimer) {
-      clearTimeout(autoSaveTimer);
+      clearTimeout(autoSaveTimer as any); // Cast to any for compatibility
     }
     
     const timer = setTimeout(() => {
@@ -154,30 +203,36 @@ const FollowupVisitForm: React.FC = () => {
     }
     
     setIsSaving(true);
-    setIsGeneratingNarrative(true);
     
     try {
-      // 1. Call AI to generate narrative
-      const aiApiUrl = `${import.meta.env.VITE_API_URL}/api/generate-narrative`;
-      console.log('Calling AI API at:', aiApiUrl); // Log the URL being called
-      const aiResponse = await axios.post(aiApiUrl, formData);
-      const generatedNarrative = aiResponse.data.narrative;
-      console.log('Generated narrative:', generatedNarrative);
-
-      // 2. Prepare payload for visit submission, including the generated narrative
-      const payload = {
-        ...formData,
-        visitType: 'followup',
-        patient: id,
-        // Append generated narrative to the existing notes or a new field
-        notes: `${formData.notes || ''}\n\nAI Generated Narrative:\n${generatedNarrative}`.trim(),
-      };
-
-      // The API endpoint and data structure will likely need to be updated on the server-side
-      // to match the new form fields. This call assumes the backend is updated to receive
-      // the new formData structure.
-      await axios.post(`http://localhost:5000/api/patients/${id}/visits/followup`, payload);
+      // 1. Save the visit data
+      const response = await axios.post(`http://localhost:5000/api/visits`, {
+         ...formData,
+         patient: id, // Add patient ID
+         doctor: _user?._id, // Add doctor ID from auth context
+         visitType: 'followup' // Explicitly add visitType
+      });
       
+      const savedVisitId = response.data.visit._id; // Assuming the saved visit ID is returned
+
+      // 2. Generate AI narrative
+      try {
+        const aiResponse = await axios.post(`${import.meta.env.VITE_API_URL}/api/generate-narrative`, {
+          ...formData,
+          visitType: 'followup'
+        });
+
+        if (aiResponse.data.success) {
+          // 3. Update the visit with the AI narrative
+          await axios.patch(`http://localhost:5000/api/visits/${savedVisitId}`, {
+            aiNarrative: aiResponse.data.narrative
+          });
+        }
+      } catch (aiError) {
+        console.error('Error generating AI narrative:', aiError);
+        // Continue with the form submission even if AI generation fails
+      }
+
       // Clear local storage after successful submission
       localStorage.removeItem(`followupVisit_${id}`);
       
@@ -187,7 +242,6 @@ const FollowupVisitForm: React.FC = () => {
       alert('Failed to save visit. Please try again.');
     } finally {
       setIsSaving(false);
-      setIsGeneratingNarrative(false);
     }
   };
 
@@ -685,18 +739,13 @@ const FollowupVisitForm: React.FC = () => {
             </button>
             <button
               type="submit"
-              disabled={isSaving || isGeneratingNarrative}
+              disabled={isSaving}
               className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
             >
               {isSaving ? (
                 <>
                   <div className="animate-spin mr-2 h-4 w-4 border-t-2 border-b-2 border-white rounded-full"></div>
                   Saving...
-                </>
-              ) : isGeneratingNarrative ? (
-                 <>
-                  <div className="animate-spin mr-2 h-4 w-4 border-t-2 border-b-2 border-white rounded-full"></div>
-                  Generating Narrative...
                 </>
               ) : (
                 <>

@@ -286,7 +286,7 @@ const VisitDetails: React.FC = () => {
         </div>
 
        {/* Initial Visit Content */}
-       {visit.visitType === 'initial' && (
+      {visit.visitType === 'initial' && (
   <div className="space-y-6">
 
     {/* Chief Complaint */}
@@ -298,52 +298,44 @@ const VisitDetails: React.FC = () => {
     )}
 
     {/* Chiropractic Adjustment */}
-    {visit.chiropracticAdjustment && visit.chiropracticAdjustment.length > 0 && (
+    {visit.chiropracticAdjustment?.length > 0 && (
       <div>
         <h3 className="text-lg font-medium text-gray-900 mb-2">Chiropractic Adjustment</h3>
-        <ul className="list-disc pl-5 text-gray-800">
-          {visit.chiropracticAdjustment.map((item: string, idx: number) => (
-            <li key={idx}>{item}</li>
-          ))}
-        </ul>
-        {visit.chiropracticOther && <p className="text-gray-800 mt-1"><strong>Other:</strong> {visit.chiropracticOther}</p>}
+        <p className="text-gray-800">
+          Chiropractic adjustments were administered to the following areas: {visit.chiropracticAdjustment.join(', ')}.
+        </p>
+        {visit.chiropracticOther && <p className="text-gray-800">Additional notes: {visit.chiropracticOther}</p>}
       </div>
     )}
 
     {/* Acupuncture */}
-    {visit.acupuncture && visit.acupuncture.length > 0 && (
+    {visit.acupuncture?.length > 0 && (
       <div>
         <h3 className="text-lg font-medium text-gray-900 mb-2">Acupuncture (Cupping)</h3>
-        <ul className="list-disc pl-5 text-gray-800">
-          {visit.acupuncture.map((item: string, idx: number) => (
-            <li key={idx}>{item}</li>
-          ))}
-        </ul>
-        {visit.acupunctureOther && <p className="text-gray-800 mt-1"><strong>Other:</strong> {visit.acupunctureOther}</p>}
+        <p className="text-gray-800">
+          Acupuncture was applied to the following regions: {visit.acupuncture.join(', ')}.
+        </p>
+        {visit.acupunctureOther && <p className="text-gray-800">Additional notes: {visit.acupunctureOther}</p>}
       </div>
     )}
 
     {/* Physiotherapy */}
-    {visit.physiotherapy && visit.physiotherapy.length > 0 && (
+    {visit.physiotherapy?.length > 0 && (
       <div>
         <h3 className="text-lg font-medium text-gray-900 mb-2">Physiotherapy</h3>
-        <ul className="list-disc pl-5 text-gray-800">
-          {visit.physiotherapy.map((item: string, idx: number) => (
-            <li key={idx}>{item}</li>
-          ))}
-        </ul>
+        <p className="text-gray-800">
+          The patient received physiotherapy including: {visit.physiotherapy.join(', ')}.
+        </p>
       </div>
     )}
 
     {/* Rehabilitation Exercises */}
-    {visit.rehabilitationExercises && visit.rehabilitationExercises.length > 0 && (
+    {visit.rehabilitationExercises?.length > 0 && (
       <div>
         <h3 className="text-lg font-medium text-gray-900 mb-2">Rehabilitation Exercises</h3>
-        <ul className="list-disc pl-5 text-gray-800">
-          {visit.rehabilitationExercises.map((item: string, idx: number) => (
-            <li key={idx}>{item}</li>
-          ))}
-        </ul>
+        <p className="text-gray-800">
+          Prescribed rehabilitation exercises include: {visit.rehabilitationExercises.join(', ')}.
+        </p>
       </div>
     )}
 
@@ -352,20 +344,18 @@ const VisitDetails: React.FC = () => {
       <div>
         <h3 className="text-lg font-medium text-gray-900 mb-2">Duration & Re-evaluation</h3>
         <p className="text-gray-800">
-          {visit.durationFrequency.timesPerWeek} times/week, Re-evaluation in {visit.durationFrequency.reEvalInWeeks} week(s)
+          Therapy is scheduled {visit.durationFrequency.timesPerWeek} times per week, with a re-evaluation in {visit.durationFrequency.reEvalInWeeks} week(s).
         </p>
       </div>
     )}
 
     {/* Referrals */}
-    {visit.referrals && visit.referrals.length > 0 && (
+    {visit.referrals?.length > 0 && (
       <div>
         <h3 className="text-lg font-medium text-gray-900 mb-2">Referrals</h3>
-        <ul className="list-disc pl-5 text-gray-800">
-          {visit.referrals.map((ref: string, idx: number) => (
-            <li key={idx}>{ref}</li>
-          ))}
-        </ul>
+        <p className="text-gray-800">
+          The patient was referred for: {visit.referrals.join(', ')}.
+        </p>
       </div>
     )}
 
@@ -374,20 +364,11 @@ const VisitDetails: React.FC = () => {
       <div>
         <h3 className="text-lg font-medium text-gray-900 mb-2">Imaging</h3>
         {Object.entries(visit.imaging).map(([modality, parts]) => {
-          const typedModality = modality as keyof typeof visit.imaging;
-          const typedParts = parts as string[] | undefined;
-          
-          if (!typedParts || typedParts.length === 0) return null;
-          
+          const partList = (parts as string[]).join(', ');
           return (
-            <div key={typedModality}>
-              <p className="font-semibold capitalize">{typedModality}</p>
-              <ul className="list-disc pl-5 text-gray-800">
-                {typedParts.map((part: string, idx: number) => (
-                  <li key={idx}>{part}</li>
-                ))}
-              </ul>
-            </div>
+            <p key={modality} className="text-gray-800">
+              {modality.charAt(0).toUpperCase() + modality.slice(1)} was performed for: {partList}.
+            </p>
           );
         })}
       </div>
@@ -402,14 +383,12 @@ const VisitDetails: React.FC = () => {
     )}
 
     {/* Nerve Study */}
-    {visit.nerveStudy && visit.nerveStudy.length > 0 && (
+    {visit.nerveStudy?.length > 0 && (
       <div>
         <h3 className="text-lg font-medium text-gray-900 mb-2">Nerve Study</h3>
-        <ul className="list-disc pl-5 text-gray-800">
-          {visit.nerveStudy.map((item: string, idx: number) => (
-            <li key={idx}>{item}</li>
-          ))}
-        </ul>
+        <p className="text-gray-800">
+          Nerve studies revealed: {visit.nerveStudy.join(', ')}.
+        </p>
       </div>
     )}
 
@@ -417,11 +396,10 @@ const VisitDetails: React.FC = () => {
     {visit.restrictions && (
       <div>
         <h3 className="text-lg font-medium text-gray-900 mb-2">Restrictions</h3>
-        <ul className="list-disc pl-5 text-gray-800">
-          <li>Avoid Activity: {visit.restrictions.avoidActivityWeeks} week(s)</li>
-          <li>Lifting Limit: {visit.restrictions.liftingLimitLbs} lbs</li>
-          {visit.restrictions.avoidProlongedSitting && <li>Avoid prolonged sitting/standing</li>}
-        </ul>
+        <p className="text-gray-800">
+          The patient is restricted from physical activity for {visit.restrictions.avoidActivityWeeks} week(s) with a lifting limit of {visit.restrictions.liftingLimitLbs} lbs.
+          {visit.restrictions.avoidProlongedSitting && ' Prolonged sitting and standing should be avoided.'}
+        </p>
       </div>
     )}
 
@@ -447,242 +425,196 @@ const VisitDetails: React.FC = () => {
 
        
         {/* Follow-up Visit Details */}
-        {visit.visitType === 'followup' && (
-          <div>
-            {/* Areas */}
-            {(visit.areasImproving !== undefined || visit.areasExacerbated !== undefined || visit.areasSame !== undefined) && (
-              <div className="mb-4">
-                <h2 className="text-xl font-semibold text-gray-800 mb-2">Areas: Auto generated from Initial</h2>
-                 <ul className="list-disc list-inside text-gray-700 space-y-1">
-                   {visit.areasImproving && <li>Improving</li>}
-                   {visit.areasExacerbated && <li>Exacerbated</li>}
-                   {visit.areasSame && <li>Same</li>}
-                 </ul>
-              </div>
-            )}
+       {visit.visitType === 'followup' && (
+  <div className="space-y-6">
 
-            {/* Examination */}
-            {(visit.musclePalpation || visit.painRadiating || visit.romWnlNoPain !== undefined || visit.romWnlWithPain !== undefined || visit.romImproved !== undefined || visit.romDecreased !== undefined || visit.romSame !== undefined || (visit.orthos?.tests || visit.orthos?.result)) && (
-               <div className="mb-4">
-                <h2 className="text-xl font-semibold text-gray-800 mb-4">Examination</h2>
+    {/* Areas */}
+    {(visit.areasImproving || visit.areasExacerbated || visit.areasSame) && (
+      <div>
+        <h2 className="text-xl font-semibold text-gray-800 mb-2">Areas (Auto-generated from Initial)</h2>
+        <p className="text-gray-700">
+          The following observations were made:{" "}
+          {visit.areasImproving && "Some areas are improving. "}
+          {visit.areasExacerbated && "Certain areas are exacerbated. "}
+          {visit.areasSame && "Some areas remain the same."}
+        </p>
+      </div>
+    )}
 
-                {/* Muscle Palpation */}
-                {visit.musclePalpation && (
-                  <div className="mb-2">
-                    <h3 className="text-lg font-medium text-gray-900">Muscle Palpation:</h3>
-                    <p className="text-gray-700">{visit.musclePalpation}</p>
-                  </div>
-                )}
+    {/* Examination */}
+    {(visit.musclePalpation || visit.painRadiating || visit.romWnlNoPain || visit.romWnlWithPain || visit.romImproved || visit.romDecreased || visit.romSame || (visit.orthos?.tests || visit.orthos?.result)) && (
+      <div>
+        <h2 className="text-xl font-semibold text-gray-800 mb-2">Examination</h2>
 
-                {/* Pain Radiating */}
-                {visit.painRadiating && (
-                  <div className="mb-2">
-                    <h3 className="text-lg font-medium text-gray-900">Pain Radiating:</h3>
-                     <p className="text-gray-700">{visit.painRadiating}</p>
-                  </div>
-                )}
-
-                {/* ROM */}
-                {(visit.romWnlNoPain !== undefined || visit.romWnlWithPain !== undefined || visit.romImproved !== undefined || visit.romDecreased !== undefined || visit.romSame !== undefined) && (
-                   <div className="mb-2">
-                     <h3 className="text-lg font-medium text-gray-900">ROM:</h3>
-                      <ul className="list-disc list-inside text-gray-700 space-y-1">
-                       {visit.romWnlNoPain && <li>WNL (No Pain)</li>}
-                       {visit.romWnlWithPain && <li>WNL (With Pain)</li>}
-                       {visit.romImproved && <li>Improved</li>}
-                       {visit.romDecreased && <li>Decreased</li>}
-                       {visit.romSame && <li>Same</li>}
-                      </ul>
-                   </div>
-                )}
-
-                 {/* Orthos */}
-                 {(visit.orthos?.tests || visit.orthos?.result) && (
-                  <div className="mb-2">
-                     <h3 className="text-lg font-medium text-gray-900">Orthos:</h3>
-                      <ul className="list-disc list-inside text-gray-700 space-y-1">
-                         <li>
-                           Tests: {visit.orthos?.tests || 'N/A'},
-                           Result: {visit.orthos?.result || 'N/A'}
-                         </li>
-                    </ul>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Activities that still cause pain */}
-            {(visit.activitiesCausePain || visit.activitiesCausePainOther) && (
-              <div className="mb-4">
-                 <h2 className="text-xl font-semibold text-gray-800 mb-2">Activities that still cause pain:</h2>
-                  <p className="text-gray-700">
-                    {visit.activitiesCausePain}
-                    {visit.activitiesCausePainOther && ` Other: ${visit.activitiesCausePainOther}`}
-                  </p>
-              </div>
-            )}
-
-            {/* ASSESSMENT AND PLAN */}
-            {(visit.treatmentPlan?.treatments || visit.treatmentPlan?.timesPerWeek || visit.overallResponse?.improving !== undefined || visit.overallResponse?.worse !== undefined || visit.overallResponse?.same !== undefined || visit.referrals || visit.diagnosticStudy?.study || visit.diagnosticStudy?.bodyPart || visit.diagnosticStudy?.result || visit.homeCare) && (
-               <div className="mb-4">
-                <h2 className="text-xl font-semibold text-gray-800 mb-4">ASSESSMENT AND PLAN</h2>
-
-                 {/* Treatment plan */}
-                 {(visit.treatmentPlan?.treatments || visit.treatmentPlan?.timesPerWeek) && (
-                   <div className="mb-2">
-                     <h3 className="text-lg font-medium text-gray-900">Treatment plan:</h3>
-                      <p className="text-gray-700">
-                        {visit.treatmentPlan?.treatments}
-                        {visit.treatmentPlan?.timesPerWeek && ` Times per week: ${visit.treatmentPlan.timesPerWeek}`}
-                      </p>
-                   </div>
-                 )}
-
-                {/* Overall response to care */}
-                 {(visit.overallResponse?.improving !== undefined || visit.overallResponse?.worse !== undefined || visit.overallResponse?.same !== undefined) && (
-                   <div className="mb-2">
-                     <h3 className="text-lg font-medium text-gray-900">Overall response to care:</h3>
-                      <ul className="list-disc list-inside text-gray-700 space-y-1">
-                       {visit.overallResponse?.improving && <li>Improving</li>}
-                       {visit.overallResponse?.worse && <li>Worse</li>}
-                       {visit.overallResponse?.same && <li>Same</li>}
-                      </ul>
-                   </div>
-                 )}
-
-                {/* Referrals */}
-                 {visit.referrals && (
-                   <div className="mb-2">
-                     <h3 className="text-lg font-medium text-gray-900">Referrals:</h3>
-                     <p className="text-gray-700">{visit.referrals}</p>
-                   </div>
-                 )}
-
-                {/* Review of diagnostic study with the patient */}
-                 {(visit.diagnosticStudy?.study || visit.diagnosticStudy?.bodyPart || visit.diagnosticStudy?.result) && (
-                   <div className="mb-2">
-                     <h3 className="text-lg font-medium text-gray-900">Review of diagnostic study with the patient:</h3>
-                      <ul className="list-disc list-inside text-gray-700 space-y-1">
-                         <li>
-                           Study: {visit.diagnosticStudy?.study || 'N/A'},
-                           Body Part: {visit.diagnosticStudy?.bodyPart || 'N/A'},
-                           Result: {visit.diagnosticStudy?.result || 'N/A'}
-                         </li>
-                    </ul>
-                  </div>
-                )}
-
-                {/* Home Care */}
-                 {visit.homeCare && (
-                   <div className="mb-2">
-                     <h3 className="text-lg font-medium text-gray-900">Home Care:</h3>
-                     <p className="text-gray-700">{visit.homeCare}</p>
-                   </div>
-                 )}
-
-              </div>
-            )}
-
-          </div>
+        {visit.musclePalpation && (
+          <p className="text-gray-700">
+            <strong>Muscle Palpation:</strong> {visit.musclePalpation}
+          </p>
         )}
+
+        {visit.painRadiating && (
+          <p className="text-gray-700">
+            <strong>Pain Radiating:</strong> {visit.painRadiating}
+          </p>
+        )}
+
+        {(visit.romWnlNoPain || visit.romWnlWithPain || visit.romImproved || visit.romDecreased || visit.romSame) && (
+          <p className="text-gray-700">
+            <strong>Range of Motion:</strong>{" "}
+            {[
+              visit.romWnlNoPain && "WNL (No Pain)",
+              visit.romWnlWithPain && "WNL (With Pain)",
+              visit.romImproved && "Improved",
+              visit.romDecreased && "Decreased",
+              visit.romSame && "Same"
+            ].filter(Boolean).join(", ")}.
+          </p>
+        )}
+
+        {(visit.orthos?.tests || visit.orthos?.result) && (
+          <p className="text-gray-700">
+            <strong>Orthopedic Tests:</strong> {visit.orthos?.tests || 'N/A'}, Result: {visit.orthos?.result || 'N/A'}
+          </p>
+        )}
+      </div>
+    )}
+
+    {/* Activities that still cause pain */}
+    {(visit.activitiesCausePain || visit.activitiesCausePainOther) && (
+      <div>
+        <h2 className="text-xl font-semibold text-gray-800 mb-2">Activities that Still Cause Pain</h2>
+        <p className="text-gray-700">
+          {visit.activitiesCausePain}
+          {visit.activitiesCausePainOther && ` Other: ${visit.activitiesCausePainOther}`}
+        </p>
+      </div>
+    )}
+
+    {/* Assessment and Plan */}
+    {(visit.treatmentPlan?.treatments || visit.treatmentPlan?.timesPerWeek || visit.overallResponse?.improving || visit.overallResponse?.worse || visit.overallResponse?.same || visit.referrals || visit.diagnosticStudy?.study || visit.diagnosticStudy?.bodyPart || visit.diagnosticStudy?.result || visit.homeCare) && (
+      <div>
+        <h2 className="text-xl font-semibold text-gray-800 mb-2">Assessment and Plan</h2>
+
+        {/* Treatment Plan */}
+        {(visit.treatmentPlan?.treatments || visit.treatmentPlan?.timesPerWeek) && (
+          <p className="text-gray-700">
+            <strong>Treatment Plan:</strong> {visit.treatmentPlan?.treatments || ''}{" "}
+            {visit.treatmentPlan?.timesPerWeek && `Recommended frequency: ${visit.treatmentPlan.timesPerWeek} times per week.`}
+          </p>
+        )}
+
+        {/* Overall Response */}
+        {(visit.overallResponse?.improving || visit.overallResponse?.worse || visit.overallResponse?.same) && (
+          <p className="text-gray-700">
+            <strong>Overall Response to Care:</strong>{" "}
+            {[
+              visit.overallResponse?.improving && "Patient is improving",
+              visit.overallResponse?.worse && "Condition is worsening",
+              visit.overallResponse?.same && "Condition remains the same"
+            ].filter(Boolean).join(", ")}.
+          </p>
+        )}
+
+        {/* Referrals */}
+        {visit.referrals && (
+          <p className="text-gray-700">
+            <strong>Referrals:</strong> {visit.referrals}
+          </p>
+        )}
+
+        {/* Diagnostic Study */}
+        {(visit.diagnosticStudy?.study || visit.diagnosticStudy?.bodyPart || visit.diagnosticStudy?.result) && (
+          <p className="text-gray-700">
+            <strong>Diagnostic Study:</strong>{" "}
+            Study: {visit.diagnosticStudy?.study || 'N/A'}, Body Part: {visit.diagnosticStudy?.bodyPart || 'N/A'}, Result: {visit.diagnosticStudy?.result || 'N/A'}
+          </p>
+        )}
+
+        {/* Home Care */}
+        {visit.homeCare && (
+          <p className="text-gray-700">
+            <strong>Home Care:</strong> {visit.homeCare}
+          </p>
+        )}
+      </div>
+    )}
+
+  </div>
+)}
 
 
         {/* Discharge Visit Content */}
-        {visit.visitType === 'discharge' && (
-  <div className="space-y-6">
+      {visit.visitType === 'discharge' && (
+  <div className="space-y-4 text-gray-800 leading-relaxed">
 
-    <h2 className="text-xl font-bold text-gray-900">EXAM FORM — DISCHARGE</h2>
+    <h2 className="text-xl font-bold text-gray-900 border-b pb-1">EXAM FORM — DISCHARGE</h2>
 
-    <div>
-      <h3 className="font-medium text-gray-800">Areas:</h3>
-      <p className="text-gray-700">
-        {visit.areasImproving && 'Improving '}
-        {visit.areasExacerbated && 'Exacerbated '}
-        {visit.areasSame && 'Same '}
+    {(visit.areasImproving || visit.areasExacerbated || visit.areasSame) && (
+      <p>•{" "}
+        {[
+          visit.areasImproving && "The patient is showing improvement in some areas.",
+          visit.areasExacerbated && "Certain areas have worsened.",
+          visit.areasSame && "Some areas remain unchanged."
+        ].filter(Boolean).join(" ")}
       </p>
-    </div>
+    )}
 
-    <div>
-      <h3 className="font-medium text-gray-800">Muscle Palpation:</h3>
-      <p className="text-gray-700">{visit.musclePalpation}</p>
-    </div>
+    {visit.musclePalpation && (
+      <p>• <strong>Muscle Palpation:</strong> {visit.musclePalpation}</p>
+    )}
 
-    <div>
-      <h3 className="font-medium text-gray-800">Pain Radiating:</h3>
-      <p className="text-gray-700">{visit.painRadiating}</p>
-    </div>
+    {visit.painRadiating && (
+      <p>• <strong>Pain Radiating:</strong> {visit.painRadiating}</p>
+    )}
 
-    <div>
-      <h3 className="font-medium text-gray-800">ROM:</h3>
-      <p className="text-gray-700">{visit.romPercent}% of pre-injury</p>
-    </div>
+    {visit.romPercent && (
+      <p>• <strong>Range of Motion:</strong> The patient has regained approximately {visit.romPercent}% of pre-injury ROM.</p>
+    )}
 
-    <div>
-      <h3 className="font-medium text-gray-800">Orthos:</h3>
-      <p className="text-gray-700"><strong>Tests:</strong> {visit.orthos?.tests}</p>
-      <p className="text-gray-700"><strong>Result:</strong> {visit.orthos?.result}</p>
-    </div>
+    {(visit.orthos?.tests || visit.orthos?.result) && (
+      <p>• <strong>Orthopedic Tests:</strong> {visit.orthos?.tests || 'N/A'}, with the result: {visit.orthos?.result || 'N/A'}.</p>
+    )}
 
-    <div>
-      <h3 className="font-medium text-gray-800">Activities Causing Pain:</h3>
-      <p className="text-gray-700">{visit.activitiesCausePain}</p>
-    </div>
+    {visit.activitiesCausePain && (
+      <p>• <strong>Activities Causing Pain:</strong> {visit.activitiesCausePain}</p>
+    )}
 
-    <div>
-      <h3 className="font-medium text-gray-800">Other Notes:</h3>
-      <p className="text-gray-700">{visit.otherNotes}</p>
-    </div>
+    {visit.otherNotes && (
+      <p>• <strong>Other Notes:</strong> {visit.otherNotes}</p>
+    )}
 
-    <h2 className="text-xl font-bold text-gray-900 mt-6">ASSESSMENT AND PLAN</h2>
+    <h2 className="text-xl font-bold text-gray-900 border-b pt-4 pb-1">ASSESSMENT AND PLAN</h2>
 
-    <div>
-      <h3 className="font-medium text-gray-800">Prognosis:</h3>
-      <p className="text-gray-700">{visit.prognosis}</p>
-    </div>
+    {visit.prognosis && (
+      <p>• <strong>Prognosis:</strong> {visit.prognosis}</p>
+    )}
 
-    <div>
-      <h3 className="font-medium text-gray-800">Diagnostic Study:</h3>
-      <p className="text-gray-700">
-        <strong>Study:</strong> {visit.diagnosticStudy?.study} <br />
-        <strong>Body Part:</strong> {visit.diagnosticStudy?.bodyPart} <br />
-        <strong>Result:</strong> {visit.diagnosticStudy?.result}
-      </p>
-    </div>
+    {(visit.diagnosticStudy?.study || visit.diagnosticStudy?.bodyPart || visit.diagnosticStudy?.result) && (
+      <p>• <strong>Diagnostic Study:</strong> A {visit.diagnosticStudy?.study || 'N/A'} was performed on the {visit.diagnosticStudy?.bodyPart || 'N/A'}, showing: {visit.diagnosticStudy?.result || 'N/A'}.</p>
+    )}
 
-    <div>
-      <h3 className="font-medium text-gray-800">Recommended Future Medical Care:</h3>
-      <ul className="list-disc pl-5 text-gray-700">
-        {visit.futureMedicalCare?.map((item, idx) => (
-          <li key={idx}>{item}</li>
-        ))}
-      </ul>
-    </div>
+    {visit.futureMedicalCare?.length > 0 && (
+      <p>• <strong>Recommended Future Medical Care:</strong> {visit.futureMedicalCare.join(", ")}.</p>
+    )}
 
-    <div>
-      <h3 className="font-medium text-gray-800">Croft Criteria:</h3>
-      <p className="text-gray-700">{visit.croftCriteria}</p>
-    </div>
+    {visit.croftCriteria && (
+      <p>• <strong>Croft Criteria:</strong> This case aligns with Croft Grade {visit.croftCriteria}.</p>
+    )}
 
-    <div>
-      <h3 className="font-medium text-gray-800">AMA Disability:</h3>
-      <p className="text-gray-700">{visit.amaDisability}</p>
-    </div>
+    {visit.amaDisability && (
+      <p>• <strong>AMA Disability:</strong> Rated as Grade {visit.amaDisability}.</p>
+    )}
 
-    <div>
-      <h3 className="font-medium text-gray-800">Home Care Instructions:</h3>
-      <ul className="list-disc pl-5 text-gray-700">
-        {visit.homeCare?.map((item, idx) => (
-          <li key={idx}>{item}</li>
-        ))}
-      </ul>
-    </div>
+    {visit.homeCare?.length > 0 && (
+      <p>• <strong>Home Care Instructions:</strong> {visit.homeCare.join(", ")}.</p>
+    )}
 
-    <div>
-      <h3 className="font-medium text-gray-800">Referrals / Notes:</h3>
-      <p className="text-gray-700">{visit.referralsNotes}</p>
-    </div>
+    {visit.referralsNotes && (
+      <p>• <strong>Referrals / Notes:</strong> {visit.referralsNotes}</p>
+    )}
   </div>
 )}
+
 
 
         {/* Additional Notes */}

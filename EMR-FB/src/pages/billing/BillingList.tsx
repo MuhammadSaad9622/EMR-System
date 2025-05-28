@@ -61,64 +61,39 @@ const BillingList: React.FC<BillingListProps> = ({
     outstanding: 0
   });
 
-  useEffect(() => {
-    if (patientId) {
-      fetchInvoices();
-      fetchBillingSummary();
-    }
-  }, [patientId, currentPage, statusFilter, dateRange]);
+ useEffect(() => {
+  fetchInvoices();
+  fetchBillingSummary();
+}, [patientId, currentPage, statusFilter, dateRange]);
+
   
 
-  const fetchInvoices = async () => {
-    if (!patientId) return; // prevent bad request if missing
-    setIsLoading(true);
-    try {
-      let url = `http://localhost:5000/api/billing?page=${currentPage}`;
-      
-      // Always filter by patientId if provided
-      if (patientId) {
-        // url += `&patientId=${patientId}`;
-        url += `&patient=${patientId}`;
-      }
-      
-      if (searchTerm) {
-        url += `&search=${searchTerm}`;
-      }
-      
-      if (statusFilter) {
-        url += `&status=${statusFilter}`;
-      }
-      
-      if (dateRange.startDate) {
-        url += `&startDate=${dateRange.startDate}`;
-      }
-      
-      if (dateRange.endDate) {
-        url += `&endDate=${dateRange.endDate}`;
-      }
-      
-      const response = await axios.get(url);
-      const filteredInvoices = response.data.invoices.filter((invoice: Invoice) => {
-        if (!patientId) return true;
-        if (typeof invoice.patient === 'string') {
-          return invoice.patient === patientId;
-        }
-        return invoice.patient._id === patientId;
-      });
-      setInvoices(filteredInvoices);
-      setTotalPages(response.data.totalPages);
-      
-      // ✅ Notify parent with invoice count
-      if (onInvoiceCountChange) {
-        onInvoiceCountChange(filteredInvoices.length); // ✅ this will now send the correct count for the current page
-      }
-      
-    } catch (error) {
-      console.error('Error fetching invoices:', error);
-    } finally {
-      setIsLoading(false);
+const fetchInvoices = async () => {
+  setIsLoading(true);
+  try {
+    let url = `http://localhost:5000/api/billing?page=${currentPage}`;
+    
+    if (searchTerm) url += `&search=${searchTerm}`;
+    if (statusFilter) url += `&status=${statusFilter}`;
+    if (dateRange.startDate) url += `&startDate=${dateRange.startDate}`;
+    if (dateRange.endDate) url += `&endDate=${dateRange.endDate}`;
+
+    const response = await axios.get(url);
+    console.log("✅ Invoice API response:", response.data); // ✅ ADD THIS
+
+    setInvoices(response.data.invoices || []);
+    setTotalPages(response.data.totalPages || 1);
+
+    if (onInvoiceCountChange) {
+      onInvoiceCountChange(response.data.invoices.length);
     }
-  };
+  } catch (error) {
+    console.error('❌ Error fetching invoices:', error); // ✅ LOG ERRORS
+  } finally {
+    setIsLoading(false);
+  }
+};
+
 
   const fetchBillingSummary = async () => {
     try {
