@@ -34,7 +34,7 @@ const toBase64 = async (url: string): Promise<string> => {
   });
 };
 
-const drawSection = (doc, title: string, content: { [key: string]: any }, y: number): number => {
+const drawSection = (doc: any, title: string, content: { [key: string]: any }, y: number): number => {
   const pageWidth = doc.internal.pageSize.getWidth();
   const margin = 20;
 
@@ -134,6 +134,8 @@ interface Patient {
   status: string;
   createdAt: string;
   updatedAt: string;
+  maritalStatus?: string;
+  injuryDate?: string;
 }
 
 interface Visit {
@@ -336,9 +338,10 @@ const PatientDetails: React.FC<{}> = () => {
         // Fetch patient appointments
         const appointmentsResponse = await axios.get(`http://localhost:5000/api/appointments?patient=${id}`);
         setAppointments(appointmentsResponse.data);
-        // ✅ Fetch invoice count for the patient
-const invoiceResponse = await axios.get(`http://localhost:5000/api/billing?patient=${id}`);
-setInvoiceCount(invoiceResponse.data.totalInvoices);
+        
+        // Fetch invoice count for the patient using the dedicated endpoint
+        const invoiceCountResponse = await axios.get(`http://localhost:5000/api/billing/count/${id}`);
+        setInvoiceCount(invoiceCountResponse.data.totalInvoices);
 
         
         // We don't need to fetch invoices here anymore as BillingList will handle it
@@ -420,177 +423,269 @@ setInvoiceCount(invoiceResponse.data.totalInvoices);
     doc.save(`Patient_${patient.firstName}_${patient.lastName}.pdf`);
   };
 
-const generateFullReport = async () => {
-  const doc = new jsPDF();
-  const pageWidth = doc.internal.pageSize.getWidth();
-  let y = 30;
-  const margin = 20;
-  const logoBase64 = await toBase64(logo);
-
-  const addHeaderAndFooter = (doc, pageNumber, totalPages) => {
-    doc.setFontSize(10);
-    doc.setTextColor(100);
-    doc.addImage(logoBase64, 'PNG', 15, 10, 10, 10);
-    doc.text('Final Narrative Report', 30, 17);
-    doc.setTextColor(180);
-    doc.text('The Wellness Studio', pageWidth - 50, 17);
-    doc.setDrawColor(150);
-    doc.line(15, 20, pageWidth - 15, 20);
-    const footerText = `The Wellness Studio • 3711 Long Beach Blvd., Suite 200, Long Beach, CA, 90807 • Tel: (562) 980-0555  Page ${pageNumber} of ${totalPages}`;
-    doc.setFontSize(9);
-    doc.setTextColor(120);
-    doc.line(15, 285, pageWidth - 15, 285);
-    doc.text(footerText, pageWidth / 2, 291, { align: 'center' });
-  };
-
-  // Patient Info Table
-  doc.setFontSize(13);
-  doc.setTextColor(50);
-  doc.setFont('helvetica', 'bold');
-  doc.text('Patient Information', pageWidth / 2, y, { align: 'center' });
-  y += 4;
-
-  autoTable(doc, {
-    startY: y + 4,
-    styles: { fontSize: 10, cellPadding: 3 },
-    headStyles: { fillColor: [160, 160, 160], textColor: 255 },
-    columnStyles: { 0: { cellWidth: 60 }, 1: { cellWidth: pageWidth - 100 } },
-    head: [['Label', 'Value']],
-    body: [
-      ['Patient', `${patient?.firstName} ${patient?.lastName}`],
-      ['Date of Birth', new Date(patient?.dateOfBirth).toLocaleDateString()],
-      ['Gender', patient?.gender],
-      ['Marital Status', patient?.maritalStatus || 'N/A'],
-      ['Injury Date', patient?.injuryDate ? new Date(patient.injuryDate).toLocaleDateString() : 'N/A'],
-    ],
-    theme: 'grid',
-  });
-
-  y = (doc as any).lastAutoTable.finalY + 10;
-
-  const addNarrativeSection = (title, color, fields) => {
-    let height = 0;
-    const sentences = [];
-
-    fields.forEach(([label, value]) => {
-      if (!value) return;
-      const line = `${label}: ${typeof value === 'string' ? value : Array.isArray(value) ? value.join(', ') : JSON.stringify(value)}`;
-      const wrapped = doc.splitTextToSize(line, 170);
-      sentences.push({ label, text: wrapped });
-      height += wrapped.length * 6 + 6;
-    });
-
-    if (y + height + 20 > 270) {
-      doc.addPage();
-      y = 30;
-    }
-
-    doc.setFillColor(255, 255, 255);
-    doc.setDrawColor(200);
-    doc.roundedRect(margin - 2, y - 6, pageWidth - margin * 2 + 4, height + 16, 4, 4, 'FD');
-
+  const generateFullReport = async () => {
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    let y = 30;
+    const margin = 20;
+    const logoBase64 = await toBase64(logo);
+  
+    // Color palette
+    const colors = {
+      primary: [44, 62, 80],       // Dark blue
+      secondary: [231, 76, 60],    // Red
+      accent: [52, 152, 219],      // Blue
+      lightGray: [236, 240, 241],  // Light gray
+      darkGray: [127, 140, 141],   // Dark gray
+      success: [46, 204, 113],     // Green
+      warning: [241, 196, 15],     // Yellow
+      purple: [155, 89, 182]       // Purple
+    };
+  
+    const addHeaderAndFooter = (doc: any, pageNumber: number, totalPages: number) => {
+      // Header with gradient background
+      doc.setFillColor(colors.primary[0], colors.primary[1], colors.primary[2]);
+      doc.rect(0, 0, pageWidth, 25, 'F');
+      
+      // Logo and title
+      doc.addImage(logoBase64, 'PNG', 15, 8, 12, 12);
+      doc.setFontSize(14);
+      doc.setTextColor(255, 255, 255);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Final Narrative Report', 32, 18);
+      
+      // Clinic name
+      doc.setFontSize(12);
+      doc.setTextColor(colors.warning[0], colors.warning[1], colors.warning[2]);
+      doc.text('The Wellness Studio', pageWidth - 15, 18, { align: 'right' });
+      
+      // Footer
+      doc.setFillColor(colors.lightGray[0], colors.lightGray[1], colors.lightGray[2]);
+      doc.rect(0, 280, pageWidth, 20, 'F');
+      
+      const footerText = `The Wellness Studio • 3711 Long Beach Blvd., Suite 200, Long Beach, CA, 90807 • Tel: (562) 980-0555  Page ${pageNumber} of ${totalPages}`;
+      doc.setFontSize(9);
+      doc.setTextColor(colors.darkGray[0], colors.darkGray[1], colors.darkGray[2]);
+      doc.text(footerText, pageWidth / 2, 290, { align: 'center' });
+    };
+  
+    // Patient Info Table
+    doc.setFontSize(14);
+    doc.setTextColor(colors.primary[0], colors.primary[1], colors.primary[2]);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(12);
-    doc.setTextColor(color);
-    doc.text(title, margin, y);
+    doc.text('PATIENT INFORMATION', pageWidth / 2, y, { align: 'center' });
     y += 10;
-
-    doc.setFont('times', 'normal');
-    doc.setFontSize(10);
-    doc.setTextColor(30);
-
-    sentences.forEach(({ label, text }) => {
-      doc.setFont('times', 'bold');
-      doc.text(`${label}:`, margin, y);
-      y += 5;
-      doc.setFont('times', 'normal');
-      doc.text(text, margin + 4, y);
-      y += text.length * 6 + 2;
+  
+    autoTable(doc, {
+      startY: y,
+      styles: { 
+        fontSize: 10, 
+        cellPadding: 4,
+        lineColor: [220, 220, 220],
+        lineWidth: 0.5
+      },
+      headStyles: { 
+        fillColor: colors.primary,
+        textColor: 255,
+        fontStyle: 'bold',
+        halign: 'center'
+      },
+      bodyStyles: {
+        textColor: 50,
+        fontStyle: 'normal'
+      },
+      columnStyles: { 
+        0: { 
+          cellWidth: 60,
+          fillColor: [245, 245, 245],
+          fontStyle: 'bold'
+        }, 
+        1: { 
+          cellWidth: pageWidth - 100 
+        } 
+      },
+      head: [['Field', 'Details']],
+      body: [
+        ['Patient', `${patient?.firstName || ''} ${patient?.lastName || ''}`],
+        ['Date of Birth', new Date(patient?.dateOfBirth || '').toLocaleDateString() || ''],
+        ['Gender', patient?.gender || ''],
+        ['Marital Status', patient?.maritalStatus || 'N/A'],
+        ['Injury Date', patient?.injuryDate ? new Date(patient.injuryDate).toLocaleDateString() : 'N/A'],
+      ],
+      theme: 'grid',
+      margin: { left: margin, right: margin }
     });
-
-    y += 4;
-  };
-
-  const grouped = {
-    initial: visits.find(v => v.visitType === 'initial'),
-    followup: visits.find(v => v.visitType === 'followup'),
-    discharge: visits.find(v => v.visitType === 'discharge')
-  };
-
-  if (grouped.initial) {
-    const v = grouped.initial;
-    addNarrativeSection('🟦 INITIAL VISIT', 'blue', [
-      ['Chief Complaint', v.chiefComplaint],
-      ['Chiropractic Adjustment', v.chiropracticAdjustment],
-      ['Acupuncture', v.acupuncture],
-      ['Physiotherapy', v.physiotherapy],
-      ['Rehabilitation Exercises', v.rehabilitationExercises],
-      ['Imaging', v.imaging],
-      ['Diagnostic Ultrasound', v.diagnosticUltrasound],
-      ['Nerve Study', v.nerveStudy],
-      ['Restrictions', v.restrictions],
-      ['Other Notes', v.otherNotes]
-    ]);
-  }
-
-  if (grouped.followup) {
-    const v = grouped.followup;
-    addNarrativeSection('🟩 FOLLOW-UP VISIT', 'green', [
-      ['Areas', `${v.areasImproving ? 'Improving' : ''} ${v.areasExacerbated ? 'Exacerbated' : ''} ${v.areasSame ? 'Same' : ''}`],
-      ['Muscle Palpation', v.musclePalpation],
-      ['Pain Radiating', v.painRadiating],
-      ['Range of Motion', `${v.romWnlNoPain ? 'WNL (No Pain)' : ''} ${v.romWnlWithPain ? 'WNL (With Pain)' : ''}`],
-      ['Orthopedic Tests', v.orthos?.tests + ' - ' + v.orthos?.result],
-      ['Activities Causing Pain', v.activitiesCausePain],
-      ['Treatment Plan', `${v.treatmentPlan?.treatments} Times/Week - ${v.treatmentPlan?.timesPerWeek}`],
-      ['Overall Response', `${v.overallResponse?.improving ? 'Improving' : ''} ${v.overallResponse?.worse ? 'Worse' : ''} ${v.overallResponse?.same ? 'Same' : ''}`],
-      ['Diagnostic Study', v.diagnosticStudy],
-      ['Home Care', v.homeCare],
-      ['Referral', v.referral],
-      ['Notes', v.otherNotes]
-    ]);
-  }
-
-  if (grouped.discharge) {
-    const v = grouped.discharge;
-    addNarrativeSection('🟥 DISCHARGE VISIT', 'red', [
-      ['Prognosis', v.prognosis],
-      ['Diagnostic Study', v.diagnosticStudy],
-      ['Recommended Future Medical Care', v.futureMedicalCare],
-      ['Croft Criteria', v.croftCriteria],
-      ['AMA Disability', v.amaDisability],
-      ['Home Care Instructions', v.homeCare],
-      ['Referrals / Notes', v.referralsNotes]
-    ]);
-  }
-
-  const totalPages = doc.internal.getNumberOfPages();
-  for (let i = 1; i <= totalPages; i++) {
-    doc.setPage(i);
-    addHeaderAndFooter(doc, i, totalPages);
-  }
-
-  const fileName = `${patient?.lastName || 'Report'}_Narrative_Report.pdf`;
-  doc.save(fileName);
-
-  const blob = doc.output('blob');
-  const formData = new FormData();
-  formData.append('file', blob, fileName);
-
-  try {
-    await axios.post('http://localhost:5000/api/reports/upload', formData);
-    if (patient?.email) {
-      await axios.post('http://localhost:5000/api/reports/email', { email: patient.email, fileName });
-      toast.success('Report emailed to provider/patient');
-    } else {
-      toast.info('Report saved to server (no email provided)');
+  
+    y = (doc as any).lastAutoTable.finalY + 15;
+  
+    const addNarrativeSection = (title: string, color: number[], fields: Array<[string, any]>) => {
+      let height = 0;
+      const sentences: Array<{label: string, text: string[]}> = [];
+  
+      fields.forEach(([label, value]) => {
+        if (!value) return;
+        const line = `${label}: ${typeof value === 'string' ? value : Array.isArray(value) ? value.join(', ') : JSON.stringify(value)}`;
+        const wrapped = doc.splitTextToSize(line, 170);
+        sentences.push({ label, text: wrapped });
+        height += wrapped.length * 6 + 6;
+      });
+  
+      if (y + height + 20 > 270) {
+        doc.addPage();
+        y = 30;
+      }
+  
+      // Section header with colored background
+      doc.setFillColor(color[0], color[1], color[2]);
+      doc.setDrawColor(color[0], color[1], color[2]);
+      doc.roundedRect(margin - 2, y - 6, pageWidth - margin * 2 + 4, 10, 3, 3, 'F');
+      
+      // Section content box
+      doc.setFillColor(255, 255, 255);
+      doc.setDrawColor(200);
+      doc.roundedRect(margin - 2, y + 4, pageWidth - margin * 2 + 4, height + 6, 3, 3, 'FD');
+  
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(12);
+      doc.setTextColor(255, 255, 255);
+      doc.text(title, margin, y + 2);
+      y += 12;
+  
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(10);
+      doc.setTextColor(50);
+  
+      sentences.forEach(({ label, text }) => {
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(color[0], color[1], color[2]);
+        doc.text(`• ${label}:`, margin, y);
+        y += 5;
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(50);
+        doc.text(text, margin + 8, y);
+        y += text.length * 6 + 2;
+      });
+  
+      y += 10;
+    };
+  
+    const grouped = {
+      initial: visits.find(v => v.visitType === 'initial'),
+      followup: visits.find(v => v.visitType === 'followup'),
+      discharge: visits.find(v => v.visitType === 'discharge')
+    };
+  
+    // Initial Visit Section
+    if (grouped.initial) {
+      const v = grouped.initial;
+      addNarrativeSection('INITIAL VISIT', colors.accent, [
+        ['Chief Complaint', v.chiefComplaint],
+        ['Chiropractic Adjustment', v.chiropracticAdjustment?.join(', ')],
+        ['Chiropractic Other Notes', v.chiropracticOther],
+        ['Acupuncture', v.acupuncture?.join(', ')],
+        ['Acupuncture Other Notes', v.acupunctureOther],
+        ['Physiotherapy', v.physiotherapy?.join(', ')],
+        ['Rehabilitation Exercises', v.rehabilitationExercises?.join(', ')],
+        ['Treatment Frequency', v.durationFrequency ? `${v.durationFrequency.timesPerWeek} times/week, re-eval in ${v.durationFrequency.reEvalInWeeks} weeks` : ''],
+        ['Referrals', v.referrals?.join(', ')],
+        ['Imaging', v.imaging ? Object.entries(v.imaging).map(([modality, parts]) => 
+          `${modality.toUpperCase()}: ${parts.join(', ')}`).join('; ') : ''],
+        ['Diagnostic Ultrasound', v.diagnosticUltrasound],
+        ['Nerve Study', v.nerveStudy?.join(', ')],
+        ['Restrictions', v.restrictions ? 
+          `Avoid activity for ${v.restrictions.avoidActivityWeeks} weeks, lifting limit ${v.restrictions.liftingLimitLbs} lbs` + 
+          (v.restrictions.avoidProlongedSitting ? ', avoid prolonged sitting' : '') : ''],
+        ['Disability Duration', v.disabilityDuration],
+        ['Other Notes', v.otherNotes]
+      ]);
     }
-  } catch (err) {
-    console.error('Upload/email failed:', err);
-    toast.error('Upload or email failed.');
-  }
-};
-
+  
+    // Follow-up Visit Section
+    if (grouped.followup) {
+      const v = grouped.followup;
+      addNarrativeSection('FOLLOW-UP VISIT', colors.success, [
+        ['Areas Status', [
+          v.areasImproving ? '✓ Improving' : '',
+          v.areasExacerbated ? '✗ Exacerbated' : '',
+          v.areasSame ? '➔ Same' : ''
+        ].filter(Boolean).join(' ')],
+        ['Muscle Palpation', v.musclePalpation],
+        ['Pain Radiating', v.painRadiating],
+        ['Range of Motion', [
+          v.romWnlNoPain ? '✓ WNL (No Pain)' : '',
+          v.romWnlWithPain ? '⚠ WNL (With Pain)' : '',
+          v.romImproved ? '↑ Improved' : '',
+          v.romDecreased ? '↓ Decreased' : '',
+          v.romSame ? '→ Same' : ''
+        ].filter(Boolean).join(' ')],
+        ['Orthopedic Tests', v.orthos ? `${v.orthos.tests} - ${v.orthos.result}` : ''],
+        ['Activities Causing Pain', [v.activitiesCausePain, v.activitiesCausePainOther].filter(Boolean).join(' ')],
+        ['Treatment Plan', v.treatmentPlan ? `${v.treatmentPlan.treatments} (${v.treatmentPlan.timesPerWeek} times/week)` : ''],
+        ['Overall Response', [
+          v.overallResponse?.improving ? '↑ Improving' : '',
+          v.overallResponse?.worse ? '↓ Worse' : '',
+          v.overallResponse?.same ? '→ Same' : ''
+        ].filter(Boolean).join(' ')],
+        ['Diagnostic Study', v.diagnosticStudy ? 
+          `${v.diagnosticStudy.study} of ${v.diagnosticStudy.bodyPart}: ${v.diagnosticStudy.result}` : ''],
+        ['Home Care', v.homeCare?.join(', ')],
+        ['Referral', v.referral],
+        ['Notes', v.otherNotes]
+      ]);
+      
+    
+     
+    }
+  
+    // Discharge Visit Section
+    if (grouped.discharge) {
+      const v = grouped.discharge;
+      addNarrativeSection('DISCHARGE VISIT', colors.secondary, [
+        ['Prognosis', v.prognosis],
+        ['Range of Motion', v.romPercent ? `${v.romPercent}% of pre-injury ROM` : ''],
+        ['Diagnostic Study', v.diagnosticStudy ? 
+          `${v.diagnosticStudy.study} of ${v.diagnosticStudy.bodyPart}: ${v.diagnosticStudy.result}` : ''],
+        ['Recommended Future Medical Care', v.futureMedicalCare?.join(', ')],
+        ['Croft Criteria', v.croftCriteria],
+        ['AMA Disability', v.amaDisability],
+        ['Home Care Instructions', v.homeCare?.join(', ')],
+        ['Referrals / Notes', v.referralsNotes],
+        ['Treatment Summary', v.treatmentSummary],
+        ['Discharge Diagnosis', v.dischargeDiagnosis?.join(', ')],
+        ['Medications at Discharge', v.medicationsAtDischarge?.map(med => 
+          `${med.name} (${med.dosage}, ${med.frequency}, ${med.duration})`).join('; ')],
+        ['Follow-up Instructions', v.followUpInstructions],
+        ['Return Precautions', v.returnPrecautions?.join(', ')]
+      ]);
+    }
+  
+    // Add page numbers and header/footer to all pages
+    const totalPages = (doc as any).internal.getNumberOfPages();
+    for (let i = 1; i <= totalPages; i++) {
+      doc.setPage(i);
+      addHeaderAndFooter(doc, i, totalPages);
+    }
+  
+    const fileName = `${patient?.lastName || 'Report'}_Narrative_Report.pdf`;
+    doc.save(fileName);
+  
+    const blob = doc.output('blob');
+    const formData = new FormData();
+    formData.append('file', blob, fileName);
+  
+    try {
+      await axios.post('http://localhost:5000/api/reports/upload', formData);
+      if (patient?.email) {
+        await axios.post('http://localhost:5000/api/reports/email', { email: patient.email, fileName });
+        toast.success('Report emailed to provider/patient');
+      } else {
+        toast.info('Report saved to server (no email provided)');
+      }
+    } catch (err) {
+      console.error('Upload/email failed:', err);
+      toast.error('Upload or email failed.');
+    }
+  };
 
 
   if (isLoading) {
@@ -1362,7 +1457,6 @@ const generateFullReport = async () => {
   patientId={id} 
   showPatientColumn={false} 
   showHeader={true} 
-  onInvoiceCountChange={setInvoiceCount} 
 />
 
             </div>

@@ -302,7 +302,7 @@ const VisitDetails: React.FC = () => {
       <div>
         <h3 className="text-lg font-medium text-gray-900 mb-2">Chiropractic Adjustment</h3>
         <p className="text-gray-800">
-          Chiropractic adjustments were administered to the following areas: {visit.chiropracticAdjustment.join(', ')}.
+          Chiropractic adjustments were administered to the following areas: {Array.isArray(visit.chiropracticAdjustment) ? visit.chiropracticAdjustment.join(', ') : 'N/A'}.
         </p>
         {visit.chiropracticOther && <p className="text-gray-800">Additional notes: {visit.chiropracticOther}</p>}
       </div>
@@ -313,7 +313,7 @@ const VisitDetails: React.FC = () => {
       <div>
         <h3 className="text-lg font-medium text-gray-900 mb-2">Acupuncture (Cupping)</h3>
         <p className="text-gray-800">
-          Acupuncture was applied to the following regions: {visit.acupuncture.join(', ')}.
+          Acupuncture was applied to the following regions: {Array.isArray(visit.acupuncture) ? visit.acupuncture.join(', ') : 'N/A'}.
         </p>
         {visit.acupunctureOther && <p className="text-gray-800">Additional notes: {visit.acupunctureOther}</p>}
       </div>
@@ -324,7 +324,7 @@ const VisitDetails: React.FC = () => {
       <div>
         <h3 className="text-lg font-medium text-gray-900 mb-2">Physiotherapy</h3>
         <p className="text-gray-800">
-          The patient received physiotherapy including: {visit.physiotherapy.join(', ')}.
+          The patient received physiotherapy including: {Array.isArray(visit.physiotherapy) ? visit.physiotherapy.join(', ') : 'N/A'}.
         </p>
       </div>
     )}
@@ -334,7 +334,7 @@ const VisitDetails: React.FC = () => {
       <div>
         <h3 className="text-lg font-medium text-gray-900 mb-2">Rehabilitation Exercises</h3>
         <p className="text-gray-800">
-          Prescribed rehabilitation exercises include: {visit.rehabilitationExercises.join(', ')}.
+          Prescribed rehabilitation exercises include: {Array.isArray(visit.rehabilitationExercises) ? visit.rehabilitationExercises.join(', ') : 'N/A'}.
         </p>
       </div>
     )}
@@ -354,7 +354,7 @@ const VisitDetails: React.FC = () => {
       <div>
         <h3 className="text-lg font-medium text-gray-900 mb-2">Referrals</h3>
         <p className="text-gray-800">
-          The patient was referred for: {visit.referrals.join(', ')}.
+          The patient was referred for: {Array.isArray(visit.referrals) ? visit.referrals.join(', ') : 'N/A'}.
         </p>
       </div>
     )}
@@ -387,7 +387,7 @@ const VisitDetails: React.FC = () => {
       <div>
         <h3 className="text-lg font-medium text-gray-900 mb-2">Nerve Study</h3>
         <p className="text-gray-800">
-          Nerve studies revealed: {visit.nerveStudy.join(', ')}.
+          Nerve studies revealed: {Array.isArray(visit.nerveStudy) ? visit.nerveStudy.join(', ') : 'N/A'}.
         </p>
       </div>
     )}
@@ -594,7 +594,7 @@ const VisitDetails: React.FC = () => {
     )}
 
     {visit.futureMedicalCare?.length > 0 && (
-      <p>• <strong>Recommended Future Medical Care:</strong> {visit.futureMedicalCare.join(", ")}.</p>
+      <p>• <strong>Recommended Future Medical Care:</strong> {Array.isArray(visit.futureMedicalCare) ? visit.futureMedicalCare.join(", ") : 'N/A'}.</p>
     )}
 
     {visit.croftCriteria && (
@@ -606,7 +606,7 @@ const VisitDetails: React.FC = () => {
     )}
 
     {visit.homeCare?.length > 0 && (
-      <p>• <strong>Home Care Instructions:</strong> {visit.homeCare.join(", ")}.</p>
+      <p>• <strong>Home Care Instructions:</strong> {Array.isArray(visit.homeCare) ? visit.homeCare.join(", ") : 'N/A'}.</p>
     )}
 
     {visit.referralsNotes && (
