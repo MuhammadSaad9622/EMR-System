@@ -34,6 +34,9 @@ import BillingList from './pages/billing/BillingList';
 import InvoiceDetails from './pages/billing/InvoiceDetails';
 import InvoiceForm from './pages/billing/InvoiceForm';
 
+// Report Pages
+import UnsettledCaseReport from './pages/reports/UnsettledCaseReport';
+
 // Layout Components
 import MainLayout from './components/layouts/MainLayout';
 
@@ -73,6 +76,9 @@ function App() {
             <Route path="billing/new" element={<InvoiceForm />} />
             <Route path="billing/:id" element={<InvoiceDetails />} />
             <Route path="billing/:id/edit" element={<InvoiceForm />} />
+            
+            {/* Report Routes */}
+            <Route path="reports/unsettled-cases" element={<UnsettledCaseReport />} />
             
             {/* Admin Routes */}
             <Route path="admin/*" element={<AdminRoute><div>Admin Panel</div></AdminRoute>} />

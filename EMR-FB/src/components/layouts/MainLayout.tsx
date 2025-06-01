@@ -5,14 +5,15 @@ import {
   Home, 
   Users, 
   Calendar, 
-  FileText, 
   DollarSign, 
   Settings, 
   LogOut, 
   Menu, 
   X,
   User,
-  ChevronDown
+  ChevronDown,
+  UserPlus,
+  FileText
 } from 'lucide-react';
 
 const MainLayout: React.FC = () => {
@@ -38,6 +39,8 @@ const MainLayout: React.FC = () => {
   const navItems = [
     { path: '/dashboard', name: 'Dashboard', icon: <Home className="w-5 h-5" /> },
     { path: '/patients', name: 'Patients', icon: <Users className="w-5 h-5" /> },
+    { path: '/patients/new', name: 'Add Patient', icon: <UserPlus className="w-5 h-5" /> },
+    { path: '/reports/unsettled-cases', name: 'Unsettled Cases', icon: <FileText className="w-5 h-5" /> },
     { path: '/appointments', name: 'Appointments', icon: <Calendar className="w-5 h-5" /> },
     { path: '/billing', name: 'Billing', icon: <DollarSign className="w-5 h-5" /> },
     ...(user?.role === 'admin' ? [{ path: '/admin', name: 'Admin', icon: <Settings className="w-5 h-5" /> }] : [])
@@ -58,7 +61,9 @@ const MainLayout: React.FC = () => {
                   key={item.path}
                   to={item.path}
                   className={`flex items-center px-4 py-2 text-sm font-medium rounded-md ${
-                    location.pathname.startsWith(item.path)
+                    (item.path === '/patients' 
+                      ? location.pathname === '/patients' 
+                      : location.pathname.startsWith(item.path))
                       ? 'bg-blue-100 text-blue-700'
                       : 'text-gray-700 hover:bg-gray-100'
                   }`}
@@ -105,7 +110,9 @@ const MainLayout: React.FC = () => {
                   key={item.path}
                   to={item.path}
                   className={`flex items-center px-4 py-2 text-sm font-medium rounded-md ${
-                    location.pathname.startsWith(item.path)
+                    (item.path === '/patients' 
+                      ? location.pathname === '/patients' 
+                      : location.pathname.startsWith(item.path))
                       ? 'bg-blue-100 text-blue-700'
                       : 'text-gray-700 hover:bg-gray-100'
                   }`}

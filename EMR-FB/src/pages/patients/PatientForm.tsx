@@ -4,6 +4,82 @@ import axios from 'axios';
 import { useAuth } from '../../contexts/AuthContext';
 import { Save, ArrowLeft } from 'lucide-react';
 
+interface Address {
+  street: string;
+  city: string;
+  state: string;
+  zipCode: string;
+  country?: string;
+}
+
+interface Attorney {
+  name: string;
+  firm: string;
+  phone: string;
+  email: string;
+  address: Omit<Address, 'country'>;
+}
+
+interface Patient {
+  _id?: string;
+  firstName: string;
+  lastName: string;
+  dateOfBirth: string;
+  gender: string;
+  phone: string;
+  email: string;
+  status: string;
+  visits?: Array<{
+    _id: string;
+    visitType: string;
+    status: string;
+    date: string;
+  }>;
+  assignedDoctor: string;
+  attorney?: Attorney;
+  address: Address;
+  emergencyContact: {
+    name: string;
+    relationship: string;
+    phone: string;
+  };
+  insuranceInfo: {
+    provider: string;
+    policyNumber: string;
+    groupNumber: string;
+    primaryInsured: string;
+  };
+  medicalHistory: {
+    allergies: string[];
+    medications: string[];
+    conditions: string[];
+    surgeries: string[];
+    familyHistory: string[];
+  };
+  subjective: {
+    fullName: string;
+    date: string;
+    physical: string[];
+    sleep: string[];
+    cognitive: string[];
+    digestive: string[];
+    emotional: string[];
+    bodyPart: string[];
+    severity: string;
+    quality: string[];
+    timing: string;
+    context: string;
+    exacerbatedBy: string[];
+    symptoms: string[];
+    notes: string;
+    radiatingTo: string;
+    radiatingRight: boolean;
+    radiatingLeft: boolean;
+    sciaticaRight: boolean;
+    sciaticaLeft: boolean;
+  };
+}
+
 interface Doctor {
   _id: string;
   firstName: string;
@@ -20,43 +96,54 @@ const PatientForm: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [doctors, setDoctors] = useState<Doctor[]>([]);
-  const [formData, setFormData] = useState({
+  // State for managing body parts in the subjective section
+  const [bodyParts, setBodyParts] = useState<Array<{part: string, side: string}>>([{part: '', side: ''}]);
 
-    subjective: {
-      fullName: '',
-      date: '',
-      physical: [],
-      sleep: [],
-      cognitive: [],
-      digestive: [],
-      emotional: [],
-      bodyPart: [],
-      severity: '',
-      quality: [],
-      timing: '',
-      context: '',
-      exacerbatedBy: [],
-      symptoms: [],
-      notes: '',
-      radiatingTo: '',
-      radiatingRight: false,
-      radiatingLeft: false,
-      sciaticaRight: false,
-      sciaticaLeft: false
-    },
+  const handleAddBodyPart = () => {
+    setBodyParts([...bodyParts, {part: '', side: ''}]);
+  };
 
+  const handleRemoveBodyPart = (index: number) => {
+    if (bodyParts.length > 1) {
+      const updated = [...bodyParts];
+      updated.splice(index, 1);
+      setBodyParts(updated);
+    }
+  };
+
+  const handleBodyPartChange = (index: number, field: 'part' | 'side', value: string) => {
+    const updated = [...bodyParts];
+    updated[index] = { ...updated[index], [field]: value };
+    setBodyParts(updated);
+    
+    // Update formData with the latest body parts
+    setFormData(prev => ({
+      ...prev,
+      subjective: {
+        ...prev.subjective,
+        bodyPart: updated.map(bp => `${bp.part}${bp.side ? ` (${bp.side})` : ''}`).filter(Boolean)
+      }
+    }));
+  };
+
+  // Define valid status values based on server enum
+  const validStatuses = ['active', 'inactive', 'pending', 'discharged'] as const;
+  
+  const [formData, setFormData] = useState<Patient>({
     firstName: '',
     lastName: '',
     dateOfBirth: '',
     gender: 'male',
-    email: '',
     phone: '',
+    email: '',
+    status: 'active', // Default to 'active' instead of 'Active'
+    assignedDoctor: user?.role === 'admin' ? '' : user?._id || '',
     address: {
       street: '',
       city: '',
       state: '',
       zipCode: '',
-      country: ''
+      country: 'USA'
     },
     emergencyContact: {
       name: '',
@@ -76,8 +163,40 @@ const PatientForm: React.FC = () => {
       surgeries: [''],
       familyHistory: ['']
     },
-    assignedDoctor: user?.role === 'doctor' ? (user._id) : '',
-    status: 'active'
+    subjective: {
+      fullName: '',
+      date: new Date().toISOString().split('T')[0],
+      physical: [],
+      sleep: [],
+      cognitive: [],
+      digestive: [],
+      emotional: [],
+      bodyPart: [],
+      severity: '',
+      quality: [],
+      timing: '',
+      context: '',
+      exacerbatedBy: [],
+      symptoms: [],
+      notes: '',
+      radiatingTo: '',
+      radiatingRight: false,
+      radiatingLeft: false,
+      sciaticaRight: false,
+      sciaticaLeft: false
+    },
+    attorney: {
+      name: '',
+      firm: '',
+      phone: '',
+      email: '',
+      address: {
+        street: '',
+        city: '',
+        state: '',
+        zipCode: ''
+      }
+    }
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -140,33 +259,45 @@ const PatientForm: React.FC = () => {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target as HTMLInputElement;
+    const isCheckbox = type === 'checkbox';
+    const inputValue = isCheckbox ? (e.target as HTMLInputElement).checked : value;
     
-    // Handle nested objects
-    if (name.includes('.')) {
-      const [parent, child] = name.split('.');
-      setFormData(prev => {
-        const parentValue = prev[parent as keyof typeof prev];
-        if (typeof parentValue === 'object' && parentValue !== null) {
-          return {
-            ...prev,
-            [parent]: {
-              ...parentValue,
-              [child]: type === 'checkbox' ? (e.target as HTMLInputElement).checked : value
-            }
-          };
+    setFormData(prev => {
+      // Create a deep copy of the previous state
+      const newState = JSON.parse(JSON.stringify(prev));
+      
+      // Handle nested properties (e.g., attorney.address.street)
+      if (name.includes('.')) {
+        const parts = name.split('.');
+        let current = newState;
+        
+        // Traverse the object path
+        for (let i = 0; i < parts.length - 1; i++) {
+          const part = parts[i];
+          if (!current[part] || typeof current[part] !== 'object') {
+            // Initialize the nested object if it doesn't exist
+            current[part] = {};
+          }
+          current = current[part];
         }
-        return prev;
-      });
-    } else {
-      setFormData(prev => ({
-        ...prev,
-        [name]: type === 'checkbox' ? (e.target as HTMLInputElement).checked : value
-      }));
-    }
+        
+        // Set the value at the final path
+        const lastPart = parts[parts.length - 1];
+        current[lastPart] = inputValue;
+      } else {
+        // Handle top-level properties
+        newState[name] = inputValue;
+      }
+      
+      return newState;
+    });
     
-    // Clear error for this field
+    // Clear error for this field if it exists
     if (errors[name]) {
-      setErrors(prev => ({ ...prev, [name]: '' }));
+      setErrors(prev => ({
+        ...prev,
+        [name]: ''
+      }));
     }
   };
 
@@ -208,65 +339,227 @@ const PatientForm: React.FC = () => {
     }));
   };
 
-  const validateForm = () => {
-    const newErrors: Record<string, string> = {};
+  // Helper function to clean and validate form data
+  const preparePatientData = (data: Patient) => {
+    // Create a deep copy of the data
+    const cleanedData: any = JSON.parse(JSON.stringify(data));
     
-    // Required fields
-    if (!formData.firstName) newErrors.firstName = 'First name is required';
-    if (!formData.lastName) newErrors.lastName = 'Last name is required';
-    if (!formData.dateOfBirth) newErrors.dateOfBirth = 'Date of birth is required';
-    if (!formData.email) newErrors.email = 'Email is required';
-    if (!formData.phone) newErrors.phone = 'Phone number is required';
-    if (!formData.assignedDoctor) newErrors.assignedDoctor = 'Assigned doctor is required';
-    
-    // Email validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (formData.email && !emailRegex.test(formData.email)) {
-      newErrors.email = 'Invalid email format';
+    // Format date of birth
+    if (cleanedData.dateOfBirth) {
+      cleanedData.dateOfBirth = new Date(cleanedData.dateOfBirth).toISOString();
     }
     
-    // Phone validation
-    const phoneRegex = /^\d{10,15}$/;
-    if (formData.phone && !phoneRegex.test(formData.phone.replace(/[^\d]/g, ''))) {
-      newErrors.phone = 'Invalid phone number';
+    // Clean medical history arrays
+    if (cleanedData.medicalHistory) {
+      cleanedData.medicalHistory = Object.fromEntries(
+        Object.entries(cleanedData.medicalHistory).map(([key, value]) => [
+          key,
+          Array.isArray(value) ? value.filter((item: string) => item && item.trim() !== '') : value
+        ])
+      );
     }
     
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    // Clean subjective data
+    if (cleanedData.subjective) {
+      cleanedData.subjective = {
+        ...cleanedData.subjective,
+        bodyPart: Array.isArray(cleanedData.subjective.bodyPart) 
+          ? cleanedData.subjective.bodyPart.filter(part => part && part.trim() !== '')
+          : []
+      };
+    }
+    
+    // Clean attorney info
+    if (cleanedData.attorney) {
+      const hasAttorneyInfo = (
+        cleanedData.attorney.name?.trim() ||
+        cleanedData.attorney.firm?.trim() ||
+        cleanedData.attorney.phone?.trim() ||
+        cleanedData.attorney.email?.trim()
+      );
+      
+      if (!hasAttorneyInfo) {
+        delete cleanedData.attorney;
+      } else {
+        // Clean attorney address
+        if (cleanedData.attorney.address) {
+          const hasAddressInfo = Object.values(cleanedData.attorney.address).some(
+            (val: any) => val && val.trim() !== ''
+          );
+          
+          if (!hasAddressInfo) {
+            delete cleanedData.attorney.address;
+          } else {
+            // Remove empty address fields
+            cleanedData.attorney.address = Object.fromEntries(
+              Object.entries(cleanedData.attorney.address)
+                .filter(([_, v]) => v !== '' && v !== null && v !== undefined)
+            );
+          }
+        }
+      }
+    }
+    
+    return cleanedData;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!validateForm()) {
+    // Basic validation
+    const newErrors: Record<string, string> = {};
+    
+    if (!formData.firstName?.trim()) newErrors.firstName = 'First name is required';
+    if (!formData.lastName?.trim()) newErrors.lastName = 'Last name is required';
+    if (!formData.dateOfBirth) newErrors.dateOfBirth = 'Date of birth is required';
+    if (!formData.email?.trim()) {
+      newErrors.email = 'Email is required';
+    } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
+      newErrors.email = 'Email is invalid';
+    }
+    if (!formData.phone?.trim()) newErrors.phone = 'Phone number is required';
+    if (!formData.assignedDoctor) newErrors.assignedDoctor = 'Please assign a doctor';
+    
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      window.scrollTo(0, 0);
       return;
     }
     
-    setIsSaving(true);
-    
     try {
-    if (isEditMode) {
-  await axios.put(`http://localhost:5000/api/patients/${id}`, formData, {
-    headers: {
-      Authorization: `Bearer ${token}` // ✅ correct
-    }
-  });
-} else {
-  await axios.post('http://localhost:5000/api/patients', formData, {
-  headers: {
-    Authorization: `Bearer ${token}` // ✅ use the `token` directly from useAuth()
-  }
-});
-
-
-console.log('Using token:', token);
-
-
-}
-  
-      navigate('/patients');
-    } catch (error) {
+      setIsSaving(true);
+      
+      // Prepare and clean patient data
+      const patientData = preparePatientData(formData);
+      
+      // Add required fields that might be missing
+      if (!patientData.status) {
+        patientData.status = 'Active'; // Default status
+      }
+      
+      // Ensure required nested objects exist
+      if (!patientData.address) patientData.address = {} as Address;
+      if (!patientData.emergencyContact) patientData.emergencyContact = { name: '', relationship: '', phone: '' };
+      if (!patientData.insuranceInfo) patientData.insuranceInfo = { provider: '', policyNumber: '', groupNumber: '', primaryInsured: '' };
+      if (!patientData.medicalHistory) patientData.medicalHistory = { allergies: [], medications: [], conditions: [], surgeries: [], familyHistory: [] };
+      if (!patientData.subjective) patientData.subjective = {
+        fullName: '',
+        date: new Date().toISOString().split('T')[0],
+        physical: [],
+        sleep: [],
+        cognitive: [],
+        digestive: [],
+        emotional: [],
+        bodyPart: [],
+        severity: '',
+        quality: [],
+        timing: '',
+        context: '',
+        exacerbatedBy: [],
+        symptoms: [],
+        notes: '',
+        radiatingTo: '',
+        radiatingRight: false,
+        radiatingLeft: false,
+        sciaticaRight: false,
+        sciaticaLeft: false
+      };
+      
+      const config = { 
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        } 
+      };
+      
+      console.log('Sending patient data:', JSON.stringify(patientData, null, 2));
+      
+      try {
+        const response = isEditMode 
+          ? await axios.put(`http://localhost:5000/api/patients/${id}`, patientData, config)
+          : await axios.post('http://localhost:5000/api/patients', patientData, config);
+        
+        console.log('Server response:', response.data);
+        
+        // Show success message
+        alert(`Patient ${isEditMode ? 'updated' : 'created'} successfully!`);
+        
+        // Redirect to patients list
+        navigate('/patients');
+      } catch (axiosError: any) {
+        // Handle axios errors
+        console.error('Axios error details:', {
+          message: axiosError.message,
+          code: axiosError.code,
+          config: axiosError.config,
+          response: axiosError.response ? {
+            status: axiosError.response.status,
+            statusText: axiosError.response.statusText,
+            data: axiosError.response.data,
+            headers: axiosError.response.headers
+          } : 'No response',
+          request: axiosError.request ? 'Request made but no response received' : 'No request made'
+        });
+        
+        throw axiosError; // Re-throw to be caught by the outer catch
+      }
+    } catch (error: any) {
       console.error('Error saving patient:', error);
+      
+      let errorMessage = 'Failed to save patient. Please try again.';
+      let errorDetails = '';
+      
+      if (error.response) {
+        // The request was made and the server responded with a status code
+        // that falls out of the range of 2xx
+        console.error('Error response data:', error.response.data);
+        console.error('Error status:', error.response.status);
+        
+        // Try to extract more detailed error information
+        const responseData = error.response.data;
+        
+        if (typeof responseData === 'string') {
+          // If the response is a string, try to parse it as JSON
+          try {
+            const parsedData = JSON.parse(responseData);
+            errorMessage = parsedData.message || errorMessage;
+            errorDetails = parsedData.error || JSON.stringify(parsedData, null, 2);
+          } catch (e) {
+            // If it's not JSON, use the raw response
+            errorMessage = responseData || errorMessage;
+          }
+        } else if (responseData && typeof responseData === 'object') {
+          errorMessage = responseData.message || errorMessage;
+          errorDetails = responseData.error || JSON.stringify(responseData, null, 2);
+        }
+        
+        // Add status-specific messages
+        if (error.response.status === 400) {
+          errorMessage = 'Validation error. Please check your input.';
+        } else if (error.response.status === 401) {
+          errorMessage = 'Unauthorized. Please log in again.';
+        } else if (error.response.status === 500) {
+          errorMessage = 'Server error. Please try again later.';
+        }
+      } else if (error.request) {
+        // The request was made but no response was received
+        console.error('No response received:', error.request);
+        errorMessage = 'No response from server. Please check your connection.';
+      } else {
+        // Something happened in setting up the request that triggered an Error
+        console.error('Error message:', error.message);
+      }
+      
+      // Show detailed error in console
+      console.error('Full error details:', {
+        message: error.message,
+        stack: error.stack,
+        config: error.config,
+        response: error.response?.data
+      });
+      
+      // Show user-friendly error message
+      alert(`${errorMessage}${errorDetails ? `\n\nDetails: ${errorDetails}` : ''}`);
     } finally {
       setIsSaving(false);
     }
@@ -401,15 +694,15 @@ console.log('Using token:', token);
                   Status
                 </label>
                 <select
-                  id="status"
                   name="status"
                   value={formData.status}
                   onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  className="mt-1 block w-full rounded-md border border-gray-300 py-2 px-3 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm"
                 >
-                  <option value="active">Active</option>
-                  <option value="inactive">Inactive</option>
-                  <option value="discharged">Discharged</option>
+                  <option value="Active">Active</option>
+                  <option value="DC">DC</option>
+                  <option value="Auto DC">Auto DC</option>
+                  <option value="Dropped">Dropped</option>
                 </select>
               </div>
               {user?.role === 'admin' && (
@@ -503,7 +796,166 @@ console.log('Using token:', token);
                   type="text"
                   id="address.country"
                   name="address.country"
-                  value={formData.address.country}
+                  value={formData.address.country || ''}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Body Parts */}
+          {/* <div className="md:col-span-2">
+            <h2 className="text-lg font-medium text-gray-900 mb-4">Affected Body Parts</h2>
+            <div className="space-y-4">
+              {bodyParts.map((bodyPart, index) => (
+                <div key={index} className="flex items-start space-x-2">
+                  <div className="flex-1">
+                    <input
+                      type="text"
+                      value={bodyPart.part}
+                      onChange={(e) => handleBodyPartChange(index, 'part', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="Body part (e.g., Shoulder, Knee)"
+                    />
+                  </div>
+                  <div className="w-32">
+                    <select
+                      value={bodyPart.side}
+                      onChange={(e) => handleBodyPartChange(index, 'side', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value="">Side</option>
+                      <option value="Left">Left</option>
+                      <option value="Right">Right</option>
+                      <option value="Bilateral">Bilateral</option>
+                    </select>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveBodyPart(index)}
+                    className="px-3 py-2 text-red-600 hover:text-red-800"
+                    disabled={bodyParts.length <= 1}
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={handleAddBodyPart}
+                className="mt-2 inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              >
+                + Add Another Body Part
+              </button>
+            </div>
+          </div> */}
+
+          {/* Attorney Information */}
+          <div className="md:col-span-2">
+            <h2 className="text-lg font-medium text-gray-900 mb-4">Attorney Information</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label htmlFor="attorney.name" className="block text-sm font-medium text-gray-700 mb-1">
+                  Attorney Name
+                </label>
+                <input
+                  type="text"
+                  id="attorney.name"
+                  name="attorney.name"
+                  value={formData.attorney?.name || ''}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label htmlFor="attorney.firm" className="block text-sm font-medium text-gray-700 mb-1">
+                  Firm Name
+                </label>
+                <input
+                  type="text"
+                  id="attorney.firm"
+                  name="attorney.firm"
+                  value={formData.attorney?.firm || ''}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label htmlFor="attorney.phone" className="block text-sm font-medium text-gray-700 mb-1">
+                  Phone
+                </label>
+                <input
+                  type="tel"
+                  id="attorney.phone"
+                  name="attorney.phone"
+                  value={formData.attorney?.phone || ''}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label htmlFor="attorney.email" className="block text-sm font-medium text-gray-700 mb-1">
+                  Email
+                </label>
+                <input
+                  type="email"
+                  id="attorney.email"
+                  name="attorney.email"
+                  value={formData.attorney?.email || ''}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+              <div className="md:col-span-2">
+                <label htmlFor="attorney.address.street" className="block text-sm font-medium text-gray-700 mb-1">
+                  Address
+                </label>
+                <input
+                  type="text"
+                  id="attorney.address.street"
+                  name="attorney.address.street"
+                  value={formData.attorney?.address?.street || ''}
+                  onChange={handleChange}
+                  placeholder="Street address"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label htmlFor="attorney.address.city" className="block text-sm font-medium text-gray-700 mb-1">
+                  City
+                </label>
+                <input
+                  type="text"
+                  id="attorney.address.city"
+                  name="attorney.address.city"
+                  value={formData.attorney?.address?.city || ''}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label htmlFor="attorney.address.state" className="block text-sm font-medium text-gray-700 mb-1">
+                  State
+                </label>
+                <input
+                  type="text"
+                  id="attorney.address.state"
+                  name="attorney.address.state"
+                  value={formData.attorney?.address?.state || ''}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label htmlFor="attorney.address.zipCode" className="block text-sm font-medium text-gray-700 mb-1">
+                  ZIP Code
+                </label>
+                <input
+                  type="text"
+                  id="attorney.address.zipCode"
+                  name="attorney.address.zipCode"
+                  value={formData.attorney?.address?.zipCode || ''}
                   onChange={handleChange}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                 />
@@ -806,19 +1258,78 @@ console.log('Using token:', token);
 
           {/* Body Part */}
           <div className="mb-6">
-            <h3 className="text-lg font-semibold text-gray-800 mb-2">Body Part</h3>
-            <div className="flex flex-wrap gap-3 text-sm">
-              {['C/S', 'T/S', 'L/S', 'SH', 'ELB', 'WR', 'Hand', 'Finger(s)', 'Hip', 'KN', 'AN', 'Foot', 'Toe(s)', 'L Ant/Post/Lat/Med', 'R Ant/Post/Lat/Med', 'Headache', 'Frontal', 'Parietal', 'Temporal', 'Occipital', 'Head contusion'].map(part => (
-                <label key={part} className="flex items-center space-x-2">
-                  <input type="checkbox" name="subjective.bodyPart" value={part} onChange={handleChange} />
-                  <span>{part}</span>
-                </label>
+            <div className="flex justify-between items-center mb-2">
+              <h3 className="text-lg font-semibold text-gray-800">Affected Body Parts</h3>
+              <button
+                type="button"
+                onClick={handleAddBodyPart}
+                className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              >
+                + Add Body Part
+              </button>
+            </div>
+            
+            <div className="space-y-3">
+              {bodyParts.map((bodyPart, index) => (
+                <div key={index} className="flex items-start space-x-2">
+                  <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-2">
+                    <div>
+                      <select
+                        value={bodyPart.part}
+                        onChange={(e) => handleBodyPartChange(index, 'part', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      >
+                        <option value="">Select body part</option>
+                        <option value="C/S">Cervical Spine (C/S)</option>
+                        <option value="T/S">Thoracic Spine (T/S)</option>
+                        <option value="L/S">Lumbar Spine (L/S)</option>
+                        <option value="SH">Shoulder (SH)</option>
+                        <option value="ELB">Elbow (ELB)</option>
+                        <option value="WR">Wrist (WR)</option>
+                        <option value="Hand">Hand</option>
+                        <option value="Finger(s)">Finger(s)</option>
+                        <option value="Hip">Hip</option>
+                        <option value="KN">Knee (KN)</option>
+                        <option value="AN">Ankle (AN)</option>
+                        <option value="Foot">Foot</option>
+                        <option value="Toe(s)">Toe(s)</option>
+                        <option value="Head">Head</option>
+                        <option value="Other">Other (specify)</option>
+                      </select>
+                      {bodyPart.part === 'Other' && (
+                        <input
+                          type="text"
+                          placeholder="Please specify"
+                          className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                          onChange={(e) => handleBodyPartChange(index, 'part', e.target.value)}
+                        />
+                      )}
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <select
+                        value={bodyPart.side}
+                        onChange={(e) => handleBodyPartChange(index, 'side', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      >
+                        <option value="">Select side</option>
+                        <option value="Left">Left</option>
+                        <option value="Right">Right</option>
+                        <option value="Bilateral">Bilateral</option>
+                      </select>
+                      {bodyParts.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveBodyPart(index)}
+                          className="p-2 text-red-600 hover:text-red-800"
+                          title="Remove body part"
+                        >
+                          ×
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
               ))}
-              <label className="flex items-center space-x-2">
-                <input type="checkbox" name="subjective.bodyPart" value="Other" onChange={handleChange} />
-                <span>Other</span>
-                <input type="text" name="subjective.bodyPartOther" placeholder="Specify" className="border rounded px-2 py-1 text-sm" />
-              </label>
             </div>
           </div>
 

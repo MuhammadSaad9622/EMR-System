@@ -310,13 +310,13 @@ const PatientDetails: React.FC<{}> = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
   
-  // Invoice type is used in the state type definition
-  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
-    personalInfo: false,
-    contactInfo: false,
-    medicalHistory: false,
-    insuranceInfo: false
-  });
+  // All sections are always expanded
+  const expandedSections = {
+    personalInfo: true,
+    contactInfo: true,
+    medicalHistory: true,
+    insuranceInfo: true
+  };
 
   useEffect(() => {
     const fetchPatientData = async () => {
@@ -356,12 +356,7 @@ const PatientDetails: React.FC<{}> = () => {
     fetchPatientData();
   }, [id]);
 
-  const toggleSection = (section: string) => {
-    setExpandedSections(prev => ({
-      ...prev,
-      [section]: !prev[section]
-    }));
-  };
+  // No toggle function needed as all sections are always expanded
 
   const calculateAge = (dateOfBirth: string) => {
     const today = new Date();
@@ -628,7 +623,7 @@ const PatientDetails: React.FC<{}> = () => {
         ].filter(Boolean).join(' ')],
         ['Diagnostic Study', v.diagnosticStudy ? 
           `${v.diagnosticStudy.study} of ${v.diagnosticStudy.bodyPart}: ${v.diagnosticStudy.result}` : ''],
-        ['Home Care', v.homeCare?.join(', ')],
+        ['Home Care', Array.isArray(v.homeCare) ? v.homeCare.join(', ') : (v.homeCare || 'N/A')],
         ['Referral', v.referral],
         ['Notes', v.otherNotes]
       ]);
@@ -645,7 +640,7 @@ const PatientDetails: React.FC<{}> = () => {
         ['Range of Motion', v.romPercent ? `${v.romPercent}% of pre-injury ROM` : ''],
         ['Diagnostic Study', v.diagnosticStudy ? 
           `${v.diagnosticStudy.study} of ${v.diagnosticStudy.bodyPart}: ${v.diagnosticStudy.result}` : ''],
-        ['Recommended Future Medical Care', v.futureMedicalCare?.join(', ')],
+       ['Recommended Future Medical Care', Array.isArray(v.futureMedicalCare) ? v.futureMedicalCare.join(', ') : (v.futureMedicalCare || 'N/A')],
         ['Croft Criteria', v.croftCriteria],
         ['AMA Disability', v.amaDisability],
         ['Home Care Instructions', v.homeCare?.join(', ')],
@@ -682,8 +677,8 @@ const PatientDetails: React.FC<{}> = () => {
         toast.info('Report saved to server (no email provided)');
       }
     } catch (err) {
-      console.error('Upload/email failed:', err);
-      toast.error('Upload or email failed.');
+      // console.error('Upload/email failed:', err);
+      // toast.error('Upload or email failed.');
     }
   };
 
@@ -852,16 +847,8 @@ const PatientDetails: React.FC<{}> = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Personal Information */}
             <div className="bg-white shadow rounded-lg overflow-hidden">
-              <div 
-                className="px-6 py-4 border-b border-gray-200 flex justify-between items-center cursor-pointer"
-                onClick={() => toggleSection('personalInfo')}
-              >
+              <div className="px-6 py-4 border-b border-gray-200">
                 <h2 className="text-lg font-medium text-gray-900">Personal Information</h2>
-                {expandedSections.personalInfo ? (
-                  <ChevronUp className="h-5 w-5 text-gray-500" />
-                ) : (
-                  <ChevronDown className="h-5 w-5 text-gray-500" />
-                )}
               </div>
               {expandedSections.personalInfo && (
                 <div className="px-6 py-4">
@@ -915,16 +902,8 @@ const PatientDetails: React.FC<{}> = () => {
 
             {/* Contact Information */}
             <div className="bg-white shadow rounded-lg overflow-hidden">
-              <div 
-                className="px-6 py-4 border-b border-gray-200 flex justify-between items-center cursor-pointer"
-                onClick={() => toggleSection('contactInfo')}
-              >
+              <div className="px-6 py-4 border-b border-gray-200">
                 <h2 className="text-lg font-medium text-gray-900">Contact Information</h2>
-                {expandedSections.contactInfo ? (
-                  <ChevronUp className="h-5 w-5 text-gray-500" />
-                ) : (
-                  <ChevronDown className="h-5 w-5 text-gray-500" />
-                )}
               </div>
               {expandedSections.contactInfo && (
                 <div className="px-6 py-4">
@@ -972,16 +951,8 @@ const PatientDetails: React.FC<{}> = () => {
 
             {/* Medical History */}
             <div className="bg-white shadow rounded-lg overflow-hidden md:col-span-2">
-              <div 
-                className="px-6 py-4 border-b border-gray-200 flex justify-between items-center cursor-pointer"
-                onClick={() => toggleSection('medicalHistory')}
-              >
+              <div className="px-6 py-4 border-b border-gray-200">
                 <h2 className="text-lg font-medium text-gray-900">Medical History</h2>
-                {expandedSections.medicalHistory ? (
-                  <ChevronUp className="h-5 w-5 text-gray-500" />
-                ) : (
-                  <ChevronDown className="h-5 w-5 text-gray-500" />
-                )}
               </div>
               {expandedSections.medicalHistory && (
                 <div className="px-6 py-4">
@@ -1052,20 +1023,20 @@ const PatientDetails: React.FC<{}> = () => {
             </div>
 
 {/* Subjective Intake */}
-<div className="bg-white shadow rounded-lg overflow-hidden md:col-span-2">
+ <div className="bg-white shadow rounded-lg overflow-hidden md:col-span-2">
   <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
     <h2 className="text-lg font-medium text-gray-900">Subjective Intake</h2>
   </div>
   <div className="px-6 py-4">
     <dl className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-6">
-      <div>
+      {/* <div>
         <dt className="text-sm font-medium text-gray-500">Full Name</dt>
         <dd className="mt-1 text-sm text-gray-900">{patient.subjective?.fullName || 'N/A'}</dd>
       </div>
       <div>
         <dt className="text-sm font-medium text-gray-500">Date</dt>
         <dd className="mt-1 text-sm text-gray-900">{patient.subjective?.date || 'N/A'}</dd>
-      </div>
+      </div> */}
       <div>
         <dt className="text-sm font-medium text-gray-500">Severity</dt>
         <dd className="mt-1 text-sm text-gray-900">{patient.subjective?.severity || 'N/A'}</dd>
@@ -1094,18 +1065,64 @@ const PatientDetails: React.FC<{}> = () => {
   </div>
 </div>
 
-            {/* Insurance Information */}
+            {/* Attorney Information */}
             <div className="bg-white shadow rounded-lg overflow-hidden md:col-span-2">
-              <div 
-                className="px-6 py-4 border-b border-gray-200 flex justify-between items-center cursor-pointer"
-                onClick={() => toggleSection('insuranceInfo')}
-              >
+              <div className="px-6 py-4 border-b border-gray-200">
+                <h2 className="text-lg font-medium text-gray-900">Attorney Information</h2>
+              </div>
+              <div className="px-6 py-4">
+                <dl className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-6">
+                  <div>
+                    <dt className="text-sm font-medium text-gray-500">Attorney Name</dt>
+                    <dd className="mt-1 text-sm text-gray-900">
+                      {patient.attorney?.name || 'Not provided'}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-sm font-medium text-gray-500">Firm Name</dt>
+                    <dd className="mt-1 text-sm text-gray-900">
+                      {patient.attorney?.firm || 'Not provided'}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-sm font-medium text-gray-500">Phone</dt>
+                    <dd className="mt-1 text-sm text-gray-900">
+                      {patient.attorney?.phone || 'Not provided'}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-sm font-medium text-gray-500">Email</dt>
+                    <dd className="mt-1 text-sm text-gray-900">
+                      {patient.attorney?.email || 'Not provided'}
+                    </dd>
+                  </div>
+                  <div className="md:col-span-2">
+                    <dt className="text-sm font-medium text-gray-500">Address</dt>
+                    <dd className="mt-1 text-sm text-gray-900">
+                      {patient.attorney?.address?.street && <p>{patient.attorney.address.street}</p>}
+                      {(patient.attorney?.address?.city || patient.attorney?.address?.state) && (
+                        <p>
+                          {patient.attorney.address.city}, {patient.attorney.address.state} {patient.attorney.address.zipCode}
+                        </p>
+                      )}
+                      {patient.attorney?.address?.country && <p>{patient.attorney.address.country}</p>}
+                      {!patient.attorney?.address?.street && 'Not provided'}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-sm font-medium text-gray-500">Case Number</dt>
+                    <dd className="mt-1 text-sm text-gray-900">
+                      {patient.attorney?.caseNumber || 'Not provided'}
+                    </dd>
+                  </div>
+                </dl>
+              </div>
+            </div>
+
+            {/* Insurance Information */}
+            {/* <div className="bg-white shadow rounded-lg overflow-hidden md:col-span-2">
+              <div className="px-6 py-4 border-b border-gray-200">
                 <h2 className="text-lg font-medium text-gray-900">Insurance Information</h2>
-                {expandedSections.insuranceInfo ? (
-                  <ChevronUp className="h-5 w-5 text-gray-500" />
-                ) : (
-                  <ChevronDown className="h-5 w-5 text-gray-500" />
-                )}
               </div>
               {expandedSections.insuranceInfo && (
                 <div className="px-6 py-4">
@@ -1137,7 +1154,7 @@ const PatientDetails: React.FC<{}> = () => {
                   </dl>
                 </div>
               )}
-            </div>
+            </div> */}
           </div>
         )}
 
